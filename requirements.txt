@@ -6,3 +6,4 @@ sqlalchemy>=2.0
 psycopg2-binary>=2.9
 nbformat>=5.9
 jupyter>=1.0
+scikit-learn>=1.3
