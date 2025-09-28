@@ -1,0 +1,8 @@
+pandas>=2.1
+numpy>=1.25
+pyarrow>=14
+python-dotenv>=1.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+nbformat>=5.9
+jupyter>=1.0
