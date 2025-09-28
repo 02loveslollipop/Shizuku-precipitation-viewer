@@ -1,9 +1,6 @@
--- Precipitation Grid System database schema (PostgreSQL / NeonDB)
--- Run this script after connecting to the target database.
 
--- Optional extensions (enable manually if available on the Neon project).
--- CREATE EXTENSION IF NOT EXISTS postgis;
--- CREATE EXTENSION IF NOT EXISTS timescaledb;
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- Enumerated types ---------------------------------------------------------
 DO $$
@@ -16,7 +13,6 @@ BEGIN
     END IF;
 END$$;
 
--- Utility trigger to refresh updated_at timestamps ------------------------
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -25,7 +21,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Core tables --------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sensors (
     id              TEXT PRIMARY KEY,
     name            TEXT,
@@ -122,7 +117,6 @@ CREATE INDEX IF NOT EXISTS grid_runs_ts_desc_idx
 CREATE INDEX IF NOT EXISTS grid_runs_status_idx
     ON grid_runs (status);
 
--- Optional view for latest sensor readings (clean data) --------------------
 CREATE OR REPLACE VIEW latest_clean_measurements AS
 SELECT DISTINCT ON (sensor_id)
     sensor_id,
@@ -134,4 +128,3 @@ SELECT DISTINCT ON (sensor_id)
 FROM clean_measurements
 ORDER BY sensor_id, ts DESC, version DESC;
 
--- End of schema -----------------------------------------------------------
