@@ -8,10 +8,10 @@ import (
 
     "github.com/jackc/pgx/v5/pgxpool"
 
-    "github.com/zerotwo/siata-watcher/internal/config"
-    "github.com/zerotwo/siata-watcher/internal/db"
-    "github.com/zerotwo/siata-watcher/internal/siata"
-    "github.com/zerotwo/siata-watcher/internal/utils"
+    "github.com/zerotwo/siata-watcher/services/watcher/internal/config"
+    "github.com/zerotwo/siata-watcher/services/watcher/internal/db"
+    "github.com/zerotwo/siata-watcher/services/watcher/internal/siata"
+    "github.com/zerotwo/siata-watcher/services/watcher/internal/utils"
 )
 
 func main() {

@@ -1,0 +1,4 @@
+github.com/jackc/pgx/v5 v5.5.4 h1:K7C4Ecfssw2chp2DwBVgGEYVDDySY9DOMjea0nWJQDk=
+github.com/jackc/pgx/v5 v5.5.4/go.mod h1:QSrEqzxauK4u0Rq/JtiE4pdwjpG0N0DLcormxH2uCR0=
+github.com/joho/godotenv v1.5.1 h1:QZ32dxJwyNYmF3FI78MVUN1BrU9jli5df0fUCpSKEjw=
+github.com/joho/godotenv v1.5.1/go.mod h1:f3l/kbH+8YjTy+vd9+o3fykHy5ko04crssY1HXfD8Pg=
