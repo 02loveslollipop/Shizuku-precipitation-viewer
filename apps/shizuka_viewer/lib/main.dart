@@ -244,7 +244,7 @@ class _HomePageState extends State<HomePage> {
     final children = <Widget>[
       TileLayer(
         urlTemplate:
-            'https://tiles.openfreemap.org/styles/positron/{z}/{x}/{y}.png',
+            'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
         userAgentPackageName: 'com.shizuku.viewer',
         tileProvider: NetworkTileProvider(),
         maxZoom: 19,
@@ -305,7 +305,7 @@ class _HomePageState extends State<HomePage> {
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
-                '© OpenStreetMap contributors · Tiles © OpenFreeMap & CARTO',
+                '© OpenStreetMap contributors · © CARTO',
                 style: TextStyle(color: Colors.white, fontSize: 10),
               ),
             ),
