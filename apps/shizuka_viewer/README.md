@@ -1,16 +1,60 @@
-# shizuka_viewer
+# Shizuku Viewer (Flutter)
 
-A new Flutter project.
+Material-themed viewer that overlays precipitation data on a Mapbox map, powered by the Shizuku API.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- Mapbox basemap with tappable sensor pins coloured by WMO precipitation intensity classes.
+- Toggle between **Heat plot** and **Contour** visual styles via the navigation drawer.
+- Bottom panel with average precipitation line chart and time slider (placeholder series when historical data is unavailable).
+- Sensor detail sheet with mini history chart fetched on demand.
 
-A few resources to get you started if this is your first Flutter project:
+## Prerequisites
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- Flutter SDK ≥ 3.7 (`dart --version` / `flutter --version`).
+- Mapbox access token (the app currently uses `pk.eyJ1IjoiMDJsb3Zlc2xvbGxpcG9wIiwiYSI6ImNtZzVjZWtsdDAzOGYycXEyZGttZm85NngifQ.xkNii295tuT1s7eMs0Nrhg`).
+- Android Studio/Xcode CLI tools depending on target platform.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Setup
+
+1. Install packages:
+   ```bash
+   flutter pub get
+   ```
+
+2. Configure Mapbox tokens for each platform:
+   - **Android**: `android/app/src/main/AndroidManifest.xml`
+     ```xml
+     <application>
+       <meta-data
+           android:name="MAPBOX_ACCESS_TOKEN"
+           android:value="${MAPBOX_ACCESS_TOKEN}" />
+     </application>
+     ```
+     And expose the token when building: `MAPBOX_ACCESS_TOKEN=... flutter run`.
+   - **iOS**: add the same key to `ios/Runner/Info.plist`:
+     ```xml
+     <key>MBXAccessToken</key>
+     <string>${MAPBOX_ACCESS_TOKEN}</string>
+     ```
+
+3. (Optional) Update the `mapboxAccessToken` constant in `lib/main.dart` if you rotate credentials.
+
+## Running
+
+```bash
+flutter run -d <device>
+```
+
+The viewer consumes the deployed Shizuku REST API (default base URL `https://api.shizuka.02labs.me`).
+
+## Project structure
+
+- `lib/main.dart` – application entry point with UI, Mapbox integration, API client, and chart widgets.
+- `assets/icons/shizuku_logo.svg` – brand icon used in the app bar.
+- `services/api/...` (backend Go service) – provides JSON endpoints consumed by the viewer.
+
+## Notes
+
+- Android minSdkVersion is set to 20 to satisfy Mapbox requirements (`android/app/build.gradle.kts`).
+- The line chart currently synthesises a short history if the API cannot provide multiple timestamps; replace `ApiClient.fetchAverageSeries` with real aggregation when available.
