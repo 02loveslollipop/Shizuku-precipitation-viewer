@@ -31,7 +31,7 @@ def run() -> None:
 
     logger.info("raw bounds: %s to %s", min_ts, max_ts)
 
-    current = min_ts.floor("1H")
+    current = min_ts.floor("1h")
     chunk_delta = timedelta(hours=chunk_hours)
 
     processed = 0

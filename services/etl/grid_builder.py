@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import json
+import copy
 from dataclasses import dataclass
-from io import BytesIO
-from typing import Dict, Tuple
+from typing import List, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm, colors
 from pyproj import Transformer
 from scipy.signal import convolve2d
 from scipy.spatial import cKDTree
+
+from matplotlib import cm, colors
+import matplotlib.pyplot as plt
 
 @dataclass(slots=True)
 class GridArtifacts:
@@ -22,6 +23,17 @@ class GridArtifacts:
     metadata_json: str
     png_rgba: np.ndarray
     levels: np.ndarray
+    thresholds: List[dict]
+    intensity_classes: List[dict]
+
+
+INTENSITY_CLASSES = [
+    {"label": "Trace", "min_mm": 0.0, "max_mm": 0.2, "description": "Trace precipitation (≤0.2 mm)"},
+    {"label": "Light", "min_mm": 0.2, "max_mm": 2.5, "description": "Light precipitation (0.2–2.5 mm)"},
+    {"label": "Moderate", "min_mm": 2.5, "max_mm": 7.6, "description": "Moderate precipitation (2.5–7.6 mm)"},
+    {"label": "Heavy", "min_mm": 7.6, "max_mm": 50.0, "description": "Heavy precipitation (7.6–50 mm)"},
+    {"label": "Violent", "min_mm": 50.0, "max_mm": None, "description": "Violent precipitation (>50 mm)"},
+]
 
 
 class GridBuilder:
@@ -90,14 +102,42 @@ class GridBuilder:
         bbox_wgs84 = (west, south, east, north)
 
         timestamp = snapshot_df["ts"].max().isoformat()
+
+        thresholds = []
+        for idx, cls in enumerate(INTENSITY_CLASSES):
+            max_mm = cls["max_mm"]
+            if max_mm is None:
+                continue
+            next_label = (
+                INTENSITY_CLASSES[idx + 1]["label"]
+                if idx + 1 < len(INTENSITY_CLASSES)
+                else cls["label"]
+            )
+            thresholds.append(
+                {
+                    "value": float(max_mm),
+                    "category": cls["label"],
+                    "next_category": next_label,
+                }
+            )
+
         metadata = {
             "timestamp": timestamp,
             "res_m": self.res_m,
             "bbox_3857": bbox_3857,
             "bbox_wgs84": bbox_wgs84,
+            "intensity_classes": copy.deepcopy(INTENSITY_CLASSES),
+            "intensity_thresholds": thresholds,
         }
 
-        levels = np.linspace(float(np.nanmin(lanczos_grid)), float(np.nanmax(lanczos_grid)), 12)
+        if thresholds:
+            levels = np.array([t["value"] for t in thresholds], dtype=float)
+        else:
+            levels = np.linspace(
+                float(np.nanmin(lanczos_grid)),
+                float(np.nanmax(lanczos_grid)),
+                12,
+            )
 
         norm = colors.Normalize(vmin=np.nanmin(lanczos_grid), vmax=np.nanmax(lanczos_grid))
         rgba = cm.get_cmap("viridis")(norm(lanczos_grid))
@@ -112,6 +152,8 @@ class GridBuilder:
             metadata_json=json.dumps(metadata),
             png_rgba=rgba,
             levels=levels,
+            thresholds=thresholds,
+            intensity_classes=copy.deepcopy(INTENSITY_CLASSES),
         )
 
     @staticmethod

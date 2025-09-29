@@ -80,7 +80,7 @@ def run():
                 artifact.x_coords,
                 artifact.y_coords,
                 artifact.data_grid,
-                artifact.levels,
+                artifact.thresholds,
             )
             contours_url = uploader.upload_bytes(
                 f"{base_key}/contours.geojson",
@@ -88,13 +88,16 @@ def run():
                 "application/geo+json",
             )
 
+            metadata = json.loads(artifact.metadata_json)
             latest_payload = {
-                "timestamp": json.loads(artifact.metadata_json)["timestamp"],
+                "timestamp": metadata["timestamp"],
                 "grid_npz_url": npz_url,
                 "grid_json_url": grid_json_url,
                 "contours_url": contours_url,
                 "res_m": cfg.grid_resolution_m,
-                "bbox": json.loads(artifact.metadata_json)["bbox_wgs84"],
+                "bbox": metadata["bbox_wgs84"],
+                "intensity_classes": metadata.get("intensity_classes", []),
+                "intensity_thresholds": metadata.get("intensity_thresholds", []),
             }
             latest_url = uploader.upload_json("grids/latest.json", latest_payload)
             logger.info("updated latest pointer: %s", latest_url)

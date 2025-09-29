@@ -42,11 +42,14 @@ class BlobUploader:
     def upload_grid_json(self, key: str, grid_artifacts) -> str:
         import numpy as np
 
+        metadata = json.loads(grid_artifacts.metadata_json)
         payload = {
-            "timestamp": json.loads(grid_artifacts.metadata_json)["timestamp"],
-            "res_m": json.loads(grid_artifacts.metadata_json)["res_m"],
-            "bbox_3857": json.loads(grid_artifacts.metadata_json)["bbox_3857"],
-            "bbox_wgs84": json.loads(grid_artifacts.metadata_json)["bbox_wgs84"],
+            "timestamp": metadata["timestamp"],
+            "res_m": metadata["res_m"],
+            "bbox_3857": metadata["bbox_3857"],
+            "bbox_wgs84": metadata["bbox_wgs84"],
+            "intensity_classes": metadata.get("intensity_classes", []),
+            "intensity_thresholds": metadata.get("intensity_thresholds", []),
             "x": grid_artifacts.x_coords.tolist(),
             "y": grid_artifacts.y_coords.tolist(),
             "data": grid_artifacts.data_grid.astype(np.float32).tolist(),

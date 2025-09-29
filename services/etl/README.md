@@ -6,6 +6,7 @@ Python cron job that fetches cleaned precipitation snapshots, converts them into
 - Discover pending grid slots (hourly by default) by cross-referencing `clean_measurements` with `grid_runs`.
 - Build a Web Mercator grid (default 500 m resolution) with Lanczos-4 interpolation and nearest-neighbour fill.
 - Upload artifacts to Vercel Blob storage: `.npz` (numerical grid), `.json.gz` (client payload), and `contours.geojson` (vector lines), plus update `grids/latest.json` pointer.
+- Encode precipitation intensity classes following WMO guidance (Trace, Light, Moderate, Heavy, Violent), exposing them in metadata and contour features.
 - Update `grid_runs` status (`pending` → `done` / `failed`) with blob URLs and bbox metadata.
 
 ## Environment variables
