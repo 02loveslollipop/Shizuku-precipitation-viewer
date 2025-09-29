@@ -3,21 +3,22 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds environment-driven settings for the REST API.
 type Config struct {
-	DatabaseURL        string
-	BlobBaseURL        string
-	GridLatestPath     string
-	Port               int
-	BearerToken        string
-	DefaultLimit       int
-	DefaultDays        int
-	CORSAllowedOrigins string
+	DatabaseURL          string
+	BlobBaseURL          string
+	GridLatestPath       string
+	Port                 int
+	BearerToken          string
+	DefaultLimit         int
+	DefaultDays          int
+	CORSAllowedOrigins   string
 	CORSAllowCredentials bool
 }
 

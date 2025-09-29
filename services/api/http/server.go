@@ -98,11 +98,11 @@ func bearerAuthMiddleware(expected string) gin.HandlerFunc {
 func corsMiddleware(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		
+
 		// Check if origin is allowed
 		allowedOrigins := strings.Split(cfg.CORSAllowedOrigins, ",")
 		allowOrigin := false
-		
+
 		for _, allowed := range allowedOrigins {
 			allowed = strings.TrimSpace(allowed)
 			if allowed == "*" || allowed == origin {
@@ -110,11 +110,11 @@ func corsMiddleware(cfg config.Config) gin.HandlerFunc {
 				break
 			}
 		}
-		
+
 		if allowOrigin {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
-		
+
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
