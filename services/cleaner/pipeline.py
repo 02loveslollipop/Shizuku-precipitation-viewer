@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 from .config import Config
+
+logger = logging.getLogger(__name__)
 
 OUTLIER_FLAG = 1
 IMPUTED_FLAG = 2
@@ -80,12 +84,22 @@ def _clean_sensor_dataframe(sensor_id: str, df: pd.DataFrame, cfg: Config) -> pd
                     clean_series.loc[hour_mask] = median
                     imputation_method.loc[hour_mask] = "hour_median"
             remaining = clean_series.isna()
+        else:
+            logger.debug("sensor %s: no base data for hourly medians", sensor_id)
 
     if remaining.any():
-        global_median = clean_series.median()
-        if not pd.isna(global_median):
-            clean_series.loc[remaining] = global_median
-            imputation_method.loc[remaining] = "global_median"
+        base_series = clean_series.dropna()
+        fallback = base_series.median() if not base_series.empty else None
+        if pd.isna(fallback):
+            fallback = cfg.min_value_mm
+            logger.debug(
+                "sensor %s: using fallback %.3f for %d gaps",
+                sensor_id,
+                fallback,
+                remaining.sum(),
+            )
+        clean_series.loc[remaining] = fallback
+        imputation_method.loc[remaining] = "global_median"
 
     clean_series = clean_series.clip(lower=cfg.min_value_mm, upper=cfg.max_value_mm)
 
