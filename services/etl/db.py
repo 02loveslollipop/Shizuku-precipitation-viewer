@@ -95,7 +95,15 @@ class Database:
                 PENDING_SLOTS_SQL,
                 {"limit": self.cfg.max_slots_per_run},
             ).fetchall()
-        return [(row.id, pd.Timestamp(row.ts, tz="UTC")) for row in rows]
+        result = []
+        for row in rows:
+            ts = pd.Timestamp(row.ts)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            else:
+                ts = ts.tz_convert("UTC")
+            result.append((row.id, ts))
+        return result
 
     def load_snapshot(self, slot: pd.Timestamp) -> pd.DataFrame:
         start = slot
