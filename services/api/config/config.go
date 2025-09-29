@@ -44,7 +44,13 @@ func Load() (Config, error) {
 		cfg.GridLatestPath = path
 	}
 
-	if portStr := os.Getenv("API_PORT"); portStr != "" {
+	if portStr := os.Getenv("PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil && port > 0 {
+			cfg.Port = port
+		} else {
+			return cfg, fmt.Errorf("invalid PORT: %s", portStr)
+		}
+	} else if portStr := os.Getenv("API_PORT"); portStr != "" {
 		if port, err := strconv.Atoi(portStr); err == nil && port > 0 {
 			cfg.Port = port
 		} else {
