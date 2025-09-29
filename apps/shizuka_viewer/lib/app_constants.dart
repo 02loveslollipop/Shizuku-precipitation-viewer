@@ -4,7 +4,7 @@ enum VisualizationMode { heatmap, contour }
 
 const String mapboxAccessToken =
     'pk.eyJ1IjoiMDJsb3Zlc2xvbGxpcG9wIiwiYSI6ImNtZzVjZWtsdDAzOGYycXEyZGttZm85NngifQ.xkNii295tuT1s7eMs0Nrhg';
-const String apiBaseUrl = 'https://api.shizuka.02labs.me';
+const String apiBaseUrl = 'https://api.shizuku.02labs.me';
 
 const Color shizukuPrimary = Color(0xFF2D5554);
 const Color shizukuSecondary = Color(0xFF93AAA9);

@@ -29,6 +29,7 @@ class SensorDetailSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text('Location: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}'),
+          const Text('Address: Mocked via Mapbox (todo)'),
           Text('Measurement: ${measurement.valueMm.toStringAsFixed(2)} mm'),
           Text('Intensity: ${intensity.label}'),
           Text('Timestamp: ${formatter.format(measurement.timestamp.toLocal())}'),
