@@ -22,3 +22,22 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
+
+# Go build artefacts
+bin/
+*.exe
+*.test
+
+# Flutter generated files
+apps/shizuka_viewer/.dart_tool/
+apps/shizuka_viewer/build/
+apps/shizuka_viewer/.idea/
+
+apps/shizuka_viewer/android/.gradle/
+apps/shizuka_viewer/android/build/
+apps/shizuka_viewer/android/local.properties
+apps/shizuka_viewer/ios/Flutter/ephemeral/
+apps/shizuka_viewer/ios/Flutter/flutter_export_environment.sh
+apps/shizuka_viewer/macos/Flutter/ephemeral/
+apps/shizuka_viewer/macos/Flutter/flutter_export_environment.sh
+apps/shizuka_viewer/windows/flutter/ephemeral/

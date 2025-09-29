@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/zerotwo/siata-watcher/services/api/config"
-	"github.com/zerotwo/siata-watcher/services/api/db"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/api/config"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/api/db"
 )
 
 // Server bundles router and dependencies for the REST API.

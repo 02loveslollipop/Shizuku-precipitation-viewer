@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/models"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/models"
 )
 
 // FetchCurrentStations retrieves the current SIATA stations payload.

@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/config"
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/db"
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/siata"
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/utils"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/config"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/db"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/siata"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/utils"
 )
 
 func main() {

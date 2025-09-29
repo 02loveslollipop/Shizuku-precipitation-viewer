@@ -6,9 +6,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/zerotwo/siata-watcher/services/api/config"
-	"github.com/zerotwo/siata-watcher/services/api/db"
-	httpserver "github.com/zerotwo/siata-watcher/services/api/http"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/api/config"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/api/db"
+	httpserver "github.com/02loveslollipop/Shizuku-precipitation-viewer/services/api/http"
 )
 
 func main() {
