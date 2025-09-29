@@ -27,7 +27,7 @@ func New(cfg config.Config, store *db.Store) *Server {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(gin.Logger())
-	engine.Use(corsMiddleware())
+	engine.Use(corsMiddleware(cfg))
 
 	if cfg.BearerToken != "" {
 		engine.Use(bearerAuthMiddleware(cfg.BearerToken))
@@ -95,11 +95,32 @@ func bearerAuthMiddleware(expected string) gin.HandlerFunc {
 	}
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func corsMiddleware(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.GetHeader("Origin")
+		
+		// Check if origin is allowed
+		allowedOrigins := strings.Split(cfg.CORSAllowedOrigins, ",")
+		allowOrigin := false
+		
+		for _, allowed := range allowedOrigins {
+			allowed = strings.TrimSpace(allowed)
+			if allowed == "*" || allowed == origin {
+				allowOrigin = true
+				break
+			}
+		}
+		
+		if allowOrigin {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+		
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if cfg.CORSAllowCredentials {
+			c.Header("Access-Control-Allow-Credentials", "true")
+		}
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)

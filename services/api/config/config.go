@@ -10,13 +10,15 @@ import (
 
 // Config holds environment-driven settings for the REST API.
 type Config struct {
-	DatabaseURL    string
-	BlobBaseURL    string
-	GridLatestPath string
-	Port           int
-	BearerToken    string
-	DefaultLimit   int
-	DefaultDays    int
+	DatabaseURL        string
+	BlobBaseURL        string
+	GridLatestPath     string
+	Port               int
+	BearerToken        string
+	DefaultLimit       int
+	DefaultDays        int
+	CORSAllowedOrigins string
+	CORSAllowCredentials bool
 }
 
 // Load reads configuration from environment variables (optionally .env).
@@ -75,6 +77,17 @@ func Load() (Config, error) {
 	}
 
 	cfg.BearerToken = os.Getenv("API_BEARER_TOKEN")
+
+	cfg.CORSAllowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
+	if cfg.CORSAllowedOrigins == "" {
+		cfg.CORSAllowedOrigins = "*" // default to allow all
+	}
+
+	if credsStr := os.Getenv("CORS_ALLOW_CREDENTIALS"); credsStr != "" {
+		if creds, err := strconv.ParseBool(credsStr); err == nil {
+			cfg.CORSAllowCredentials = creds
+		}
+	}
 
 	return cfg, nil
 }
