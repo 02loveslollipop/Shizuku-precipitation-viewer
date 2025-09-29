@@ -26,7 +26,7 @@ class BlobUploader:
         return f"{self.cfg.blob_base_url}/{pathname.lstrip('/')}"
 
     def upload_bytes(self, key: str, data: bytes, content_type: str) -> str:
-        info = vercel_blob.put(key, data, {"contentType": content_type})
+        info = vercel_blob.put(key, data, {"contentType": content_type, "allowOverwrite": True})
         return self._resolve_url(info, key)
 
     def upload_json(self, key: str, payload: dict) -> str:
