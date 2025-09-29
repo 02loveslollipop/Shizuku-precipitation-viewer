@@ -1,6 +1,6 @@
 # Shizuku Viewer (Flutter)
 
-Material-themed viewer that overlays precipitation data on a Mapbox map, powered by the Shizuku API.
+Material-themed viewer that overlays precipitation data on a Mapbox basemap (via Flutter Map + Mapbox tiles), powered by the Shizuku API.
 
 ## Features
 
@@ -23,20 +23,8 @@ Material-themed viewer that overlays precipitation data on a Mapbox map, powered
    ```
 
 2. Configure Mapbox tokens for each platform:
-   - **Android**: `android/app/src/main/AndroidManifest.xml`
-     ```xml
-     <application>
-       <meta-data
-           android:name="MAPBOX_ACCESS_TOKEN"
-           android:value="${MAPBOX_ACCESS_TOKEN}" />
-     </application>
-     ```
-     And expose the token when building: `MAPBOX_ACCESS_TOKEN=... flutter run`.
-   - **iOS**: add the same key to `ios/Runner/Info.plist`:
-     ```xml
-     <key>MBXAccessToken</key>
-     <string>${MAPBOX_ACCESS_TOKEN}</string>
-     ```
+- **Android**: provide the token when running (`MAPBOX_ACCESS_TOKEN=... flutter run`). If you wish, add it to `android/app/src/main/AndroidManifest.xml` as a `<meta-data>` entry.
+- **iOS**: set `MBXAccessToken` in `ios/Runner/Info.plist` or export it at runtime.
 
 3. (Optional) Update the `mapboxAccessToken` constant in `lib/main.dart` if you rotate credentials.
 
@@ -50,7 +38,7 @@ The viewer consumes the deployed Shizuku REST API (default base URL `https://api
 
 ## Project structure
 
-- `lib/main.dart` – application entry point with UI, Mapbox integration, API client, and chart widgets.
+- `lib/main.dart` – application entry point with modular UI widgets, Flutter Map integration, API client, and chart widgets.
 - `assets/icons/shizuku_logo.svg` – brand icon used in the app bar.
 - `services/api/...` (backend Go service) – provides JSON endpoints consumed by the viewer.
 

@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
-import 'package:mapbox_gl/mapbox_gl.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'api/api_client.dart';
 import 'app_constants.dart';
@@ -39,9 +40,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ApiClient _apiClient = ApiClient();
-  MapboxMapController? _mapController;
-  final List<Symbol> _symbols = [];
-  final Map<String, SensorMeasurement> _symbolIdToSensor = {};
+  final MapController _mapController = MapController();
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -72,69 +71,32 @@ class _HomePageState extends State<HomePage> {
       final sensors = results[0] as List<SensorMeasurement>;
       final series = results[1] as List<SeriesPoint>;
 
-      if (mounted) {
-        setState(() {
-          _measurements = sensors;
-          _series = series.isEmpty
-              ? [
-                  SeriesPoint(
-                    timestamp: sensors.isNotEmpty
-                        ? sensors.first.timestamp
-                        : DateTime.now().toUtc(),
-                    value: sensors.isNotEmpty
-                        ? sensors
-                                .map((s) => s.valueMm)
-                                .reduce((a, b) => a + b) /
-                            sensors.length
-                        : 0,
-                  ),
-                ]
-              : series;
-          if (_selectedIndex >= _series.length) {
-            _selectedIndex = _series.length - 1;
-          }
-        });
-        _refreshMapSymbols();
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _measurements = sensors;
+        _series = series.isEmpty
+            ? [
+                SeriesPoint(
+                  timestamp: sensors.isNotEmpty
+                      ? sensors.first.timestamp
+                      : DateTime.now().toUtc(),
+                  value: sensors.isNotEmpty
+                      ? sensors.map((s) => s.valueMm).reduce((a, b) => a + b) / sensors.length
+                      : 0,
+                ),
+              ]
+            : series;
+        if (_selectedIndex >= _series.length) {
+          _selectedIndex = _series.length - 1;
+        }
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Failed to load data. $e';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _refreshMapSymbols() {
-    final controller = _mapController;
-    if (controller == null) return;
-
-    controller.removeSymbols(_symbols);
-    _symbols.clear();
-    _symbolIdToSensor.clear();
-
-    for (final measurement in _measurements) {
-      final color = colorForMeasurement(measurement.valueMm, _mode);
-      controller
-          .addSymbol(
-        SymbolOptions(
-          geometry: LatLng(measurement.lat, measurement.lon),
-          iconImage: 'marker-15',
-          iconColor: colorToRgbaString(color),
-          textField: measurement.sensorId,
-          textOffset: const Offset(0, 1.2),
-          textSize: 10,
-        ),
-      )
-          .then((symbol) {
-        _symbols.add(symbol);
-        _symbolIdToSensor[symbol.id] = measurement;
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to load data. $e';
+        _isLoading = false;
       });
     }
   }
@@ -155,7 +117,6 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             _mode = mode;
           });
-          _refreshMapSymbols();
         },
       ),
       appBar: AppBar(
@@ -169,9 +130,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(width: 12),
             Text(
               'Shizuku',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -238,30 +197,59 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMap() {
     final center = _measurements.isNotEmpty
         ? LatLng(
-            _measurements
-                    .map((m) => m.lat)
-                    .reduce((a, b) => a + b) /
-                _measurements.length,
-            _measurements
-                    .map((m) => m.lon)
-                    .reduce((a, b) => a + b) /
-                _measurements.length,
+            _measurements.map((m) => m.lat).reduce((a, b) => a + b) / _measurements.length,
+            _measurements.map((m) => m.lon).reduce((a, b) => a + b) / _measurements.length,
           )
-        : const LatLng(6.2442, -75.5812); // Medellín
+        : const LatLng(6.2442, -75.5812);
 
-    return MapboxMap(
-      accessToken: mapboxAccessToken,
-      initialCameraPosition: CameraPosition(target: center, zoom: 11),
-      styleString: MapboxStyles.MAPBOX_STREETS,
-      onMapCreated: (controller) {
-        _mapController = controller;
-        _mapController?.onSymbolTapped.add(_onSymbolTapped);
-        _refreshMapSymbols();
-      },
-      onStyleLoadedCallback: _refreshMapSymbols,
-      myLocationEnabled: false,
-      compassEnabled: true,
-      zoomGesturesEnabled: true,
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: center,
+        initialZoom: 11,
+        interactionOptions: const InteractionOptions(flags: ~InteractiveFlag.rotate),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate:
+              'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=$mapboxAccessToken',
+          additionalOptions: const {
+            'access_token': mapboxAccessToken,
+          },
+          userAgentPackageName: 'com.shizuku.viewer',
+        ),
+        MarkerLayer(markers: _buildMarkers()),
+      ],
+    );
+  }
+
+  List<Marker> _buildMarkers() {
+    return _measurements
+        .map(
+          (measurement) => Marker(
+            point: LatLng(measurement.lat, measurement.lon),
+            width: 42,
+            height: 42,
+            builder: (context) => _SensorMarker(
+              measurement: measurement,
+              mode: _mode,
+              onTap: () => _showSensorDetails(measurement),
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> _showSensorDetails(SensorMeasurement measurement) async {
+    final history = await _apiClient.fetchSensorHistory(measurement.sensorId);
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SensorDetailSheet(
+        measurement: measurement,
+        history: history,
+      ),
     );
   }
 
@@ -288,19 +276,59 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
 
-  void _onSymbolTapped(Symbol symbol) async {
-    final measurement = _symbolIdToSensor[symbol.id];
-    if (measurement == null) return;
+class _SensorMarker extends StatelessWidget {
+  const _SensorMarker({
+    required this.measurement,
+    required this.mode,
+    required this.onTap,
+  });
 
-    final history = await _apiClient.fetchSensorHistory(measurement.sensorId);
-    if (!mounted) return;
+  final SensorMeasurement measurement;
+  final VisualizationMode mode;
+  final VoidCallback onTap;
 
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SensorDetailSheet(
-        measurement: measurement,
-        history: history,
+  @override
+  Widget build(BuildContext context) {
+    final color = colorForMeasurement(measurement.valueMm, mode);
+    final cls = findIntensityClass(measurement.valueMm);
+    final tooltip = '${measurement.name ?? measurement.sensorId}\n${measurement.valueMm.toStringAsFixed(2)} mm\n${cls.label}';
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Tooltip(
+          message: tooltip,
+          decoration: BoxDecoration(
+            color: shizukuPrimary.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: const TextStyle(color: Colors.white),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withOpacity(0.85),
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                measurement.valueMm.toStringAsFixed(1),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

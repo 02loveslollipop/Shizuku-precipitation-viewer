@@ -101,7 +101,3 @@ Color colorForMeasurement(double value, VisualizationMode mode) {
   final cls = findIntensityClass(value);
   return colorForIntensityClass(cls, mode);
 }
-
-String colorToRgbaString(Color color) {
-  return 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.opacity})';
-}
