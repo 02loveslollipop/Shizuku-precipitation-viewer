@@ -11,7 +11,7 @@ Cron-friendly Go program that polls the SIATA current precipitation feed and wri
 ## Environment variables
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | ✅ | — | NeonDB PostgreSQL connection string (`sslmode=require`). |
+| `DATABASE_URL` | ✅ | — | PostgreSQL connection string (`sslmode=require`). |
 | `CURRENT_URL` | ❌ | `https://siata.gov.co/data/siata_app/Pluviometrica.json` | JSON endpoint for current stations. |
 | `WATCHER_MIN_INTERVAL` | ❌ | `5m` | Minimum duration between stored readings before forcing an insert even if the value is unchanged. |
 | `WATCHER_REQUEST_TIMEOUT` | ❌ | `30s` | HTTP request timeout. |

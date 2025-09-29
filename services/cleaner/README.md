@@ -11,7 +11,7 @@ Python cron job that reads raw precipitation measurements, applies quality contr
 ## Environment variables
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | ✅ | — | PostgreSQL DSN (NeonDB, `sslmode=require`). |
+| `DATABASE_URL` | ✅ | — | PostgreSQL DSN. |
 | `CLEANER_LOOKBACK_HOURS` | ❌ | `72` | Time window (hours) of raw data to consider. |
 | `CLEANER_MIN_VALUE_MM` | ❌ | `0.0` | Lower bound for precipitation (values below flagged as outliers). |
 | `CLEANER_MAX_VALUE_MM` | ❌ | `150.0` | Upper bound for precipitation (values above flagged as outliers). |

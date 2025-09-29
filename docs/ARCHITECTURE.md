@@ -3,7 +3,7 @@
 ## Summary
 Six-component architecture:
 1) API watcher (cron job, Go/Gin) ingests current data to DB.
-2) NeonDB PostgreSQL stores raw and cleaned data (+ grid run status).
+2) PostgreSQL stores raw and cleaned data (+ grid run status).
 3) Cleaning service (cron job, Python) applies QC + imputation to raw → clean.
 4) ETL grid service (cron job, Python) computes/interpolates grids and uploads to Blob (no public API here).
 5) REST API (Go/Gin) exposes sensor queries and latest grid link (public).
@@ -15,7 +15,7 @@ We will progress in gated steps and pause after each milestone for review.
 1. API Watcher (Go/Gin, cron)
    - Polls current JSON feed on schedule and writes only new measurements to `raw_measurements`.
    - Upserts `sensors` as needed. Idempotent via unique `(sensor_id, ts)`.
-2. NeonDB PostgreSQL
+2. PostgreSQL
    - Tables: `sensors`, `raw_measurements`, `clean_measurements`, `grid_runs`.
    - Optional: PostGIS for geometry; TimescaleDB if supported (else standard indexes).
 3. Cleaning Service (Python, cron)
@@ -35,7 +35,7 @@ Assumed fields (to be validated in Step 2):
 - `sensor_id` (string), `lat` (float), `lon` (float), `timestamp` (ISO 8601, UTC), `precipitation_mm` (float).
 
 ## Stack Overview
-- Database: PostgreSQL (on NeonDB). Optional: TimescaleDB if supported by the Neon project/plan; otherwise use standard Postgres indexes.
+- Database: PostgreSQL.
 - Scheduler: Heroku Scheduler (cron-style triggers) for watcher and ETL jobs.
 - Services:
   - Go (Gin) watcher: polls current feed and writes new measurements to DB.
@@ -46,9 +46,8 @@ Assumed fields (to be validated in Step 2):
 - Visualization: Flutter app (`flutter_map` with OSM tiles), contours overlay, and sensor charts.
 
 ## Database Choice
-Chosen: PostgreSQL (NeonDB hosted).
+Chosen: PostgreSQL.
 - Pros: strong schema + constraints, relational integrity (sensors ↔ measurements), rich indexing, time-window queries, mature geospatial (`PostGIS`) if needed, optional TimescaleDB.
-- Notes: If TimescaleDB is unavailable on NeonDB plan, proceed with regular Postgres and recommended indexes.
 
 ## PostgreSQL Schema (Recommended)
 - `sensors`
@@ -205,7 +204,7 @@ Note: If we adopt PostGIS, `sensors` can carry `geom geometry(Point, 4326)` and 
 - `sensors/{sensor_id}.parquet|jsonl` (optional) — time series export for offline consumption.
 
 ## Configuration & Secrets
-- `DATABASE_URL` — NeonDB Postgres DSN (ensure TLS/`sslmode=require`).
+- `DATABASE_URL` — Postgres DSN (ensure TLS/`sslmode=require`).
 - `HISTORIC_URL`, `CURRENT_URL` — source endpoints.
 - `VERCEL_BLOB_RW_TOKEN` — write token for Vercel Blob.
 - `GRID_RES_M`, `BBOX_PADDING_M`, `TIME_INTERVAL_MIN`, `MAX_GAP_SIMPLE`, `MODEL_TYPE` — algorithmic params.
