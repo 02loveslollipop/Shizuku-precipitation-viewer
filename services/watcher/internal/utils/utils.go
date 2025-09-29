@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/models"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/models"
 )
 
 // BuildSensorRows converts feed stations into database-ready sensor rows.

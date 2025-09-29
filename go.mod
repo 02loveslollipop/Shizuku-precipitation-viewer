@@ -1,4 +1,4 @@
-module github.com/zerotwo/siata-watcher
+module github.com/02loveslollipop/Shizuku-precipitation-viewer
 
 go 1.23
 

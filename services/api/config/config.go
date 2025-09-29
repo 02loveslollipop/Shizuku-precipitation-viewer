@@ -3,20 +3,23 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds environment-driven settings for the REST API.
 type Config struct {
-	DatabaseURL    string
-	BlobBaseURL    string
-	GridLatestPath string
-	Port           int
-	BearerToken    string
-	DefaultLimit   int
-	DefaultDays    int
+	DatabaseURL          string
+	BlobBaseURL          string
+	GridLatestPath       string
+	Port                 int
+	BearerToken          string
+	DefaultLimit         int
+	DefaultDays          int
+	CORSAllowedOrigins   string
+	CORSAllowCredentials bool
 }
 
 // Load reads configuration from environment variables (optionally .env).
@@ -44,7 +47,13 @@ func Load() (Config, error) {
 		cfg.GridLatestPath = path
 	}
 
-	if portStr := os.Getenv("API_PORT"); portStr != "" {
+	if portStr := os.Getenv("PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil && port > 0 {
+			cfg.Port = port
+		} else {
+			return cfg, fmt.Errorf("invalid PORT: %s", portStr)
+		}
+	} else if portStr := os.Getenv("API_PORT"); portStr != "" {
 		if port, err := strconv.Atoi(portStr); err == nil && port > 0 {
 			cfg.Port = port
 		} else {
@@ -69,6 +78,17 @@ func Load() (Config, error) {
 	}
 
 	cfg.BearerToken = os.Getenv("API_BEARER_TOKEN")
+
+	cfg.CORSAllowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
+	if cfg.CORSAllowedOrigins == "" {
+		cfg.CORSAllowedOrigins = "*" // default to allow all
+	}
+
+	if credsStr := os.Getenv("CORS_ALLOW_CREDENTIALS"); credsStr != "" {
+		if creds, err := strconv.ParseBool(credsStr); err == nil {
+			cfg.CORSAllowCredentials = creds
+		}
+	}
 
 	return cfg, nil
 }

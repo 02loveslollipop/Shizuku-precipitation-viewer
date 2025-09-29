@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zerotwo/siata-watcher/services/watcher/internal/models"
+	"github.com/02loveslollipop/Shizuku-precipitation-viewer/services/watcher/internal/models"
 )
 
 // UpsertSensors inserts/updates sensor metadata records.
