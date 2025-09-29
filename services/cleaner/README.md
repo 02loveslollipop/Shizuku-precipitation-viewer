@@ -32,6 +32,15 @@ export DATABASE_URL=postgres://...
 python -m services.cleaner.main
 ```
 
+### Full backfill
+To reprocess the entire history (in manageable chunks) run:
+
+```bash
+export DATABASE_URL=postgres://...
+export BACKFILL_CHUNK_HOURS=24  # optional chunk size
+python -m services.cleaner.backfill
+```
+
 ## Heroku Scheduler
 1. Ensure the repo is deployed (Python buildpack auto-detected or add `heroku/python`).
 2. Set config vars listed above, plus `PYTHONPATH=.` if needed.
