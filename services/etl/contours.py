@@ -17,22 +17,24 @@ def generate_contours_geojson(x_grid, y_grid, data_grid, levels: Iterable[float]
     try:
         contour_set: QuadContourSet = ax.contour(x_grid, y_grid, data_grid, levels=levels)
         features = []
-        for level, collection in zip(contour_set.levels, contour_set.collections):
+        for collection in contour_set.collections:
+            level_value = float(collection.get_label()) if collection.get_label() else None
             for path in collection.get_paths():
                 coords = path.vertices
                 if len(coords) < 2:
                     continue
                 lon, lat = transformer.transform(coords[:, 0], coords[:, 1])
-                features.append(
-                    {
-                        "type": "Feature",
-                        "properties": {"level": float(level)},
-                        "geometry": {
-                            "type": "LineString",
-                            "coordinates": list(map(lambda pair: [pair[0], pair[1]], zip(lon, lat))),
-                        },
-                    }
-                )
+                feature = {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": list(map(lambda pair: [pair[0], pair[1]], zip(lon, lat))),
+                    },
+                }
+                if level_value is not None:
+                    feature["properties"]["level"] = level_value
+                features.append(feature)
     finally:
         plt.close(fig)
 
