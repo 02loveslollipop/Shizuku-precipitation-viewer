@@ -72,7 +72,8 @@ class GridBuilder:
         num = convolve2d(seed_values, kernel, mode="same", boundary="symm")
         den = convolve2d(seed_mask, kernel, mode="same", boundary="symm")
 
-        lanczos_grid = np.where(den > 0, num / den, np.nan)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            lanczos_grid = np.divide(num, den, out=np.full_like(num, np.nan), where=den > 0)
 
         remaining = np.isnan(lanczos_grid)
         if remaining.any():

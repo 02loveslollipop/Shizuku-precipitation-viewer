@@ -46,7 +46,7 @@ def load() -> Config:
     if not blob_token:
         raise RuntimeError("VERCEL_BLOB_RW_TOKEN is required for ETL service")
 
-    blob_api_url = os.getenv("VERCEL_BLOB_API_URL", "https://api.vercel.com/v2/blob")
+    blob_api_url = os.getenv("VERCEL_BLOB_API_URL", "https://api.vercel.com/v2/blob/upload")
     blob_base_url = os.getenv("VERCEL_BLOB_BASE_URL")
     if not blob_base_url:
         raise RuntimeError("VERCEL_BLOB_BASE_URL must be set (e.g. https://...vercel-storage.com)")

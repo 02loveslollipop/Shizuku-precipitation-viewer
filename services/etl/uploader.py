@@ -19,9 +19,14 @@ class BlobUploader:
     def upload_bytes(self, key: str, data: bytes, content_type: str) -> str:
         files = {
             "file": (key, data, content_type),
-            "metadata": (None, json.dumps({"name": key}), "application/json"),
         }
-        response = self.session.post(self.cfg.blob_api_url, files=files, timeout=60)
+        data_payload = {"name": key}
+        response = self.session.post(
+            self.cfg.blob_api_url,
+            files=files,
+            data=data_payload,
+            timeout=60,
+        )
         response.raise_for_status()
         info = response.json()
         pathname = info.get("pathname") or key
@@ -51,4 +56,3 @@ class BlobUploader:
         }
         data = gzip.compress(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
         return self.upload_bytes(key, data, "application/json+gzip")
-
