@@ -11,3 +11,4 @@ scipy>=1.11
 pyproj>=3.6
 matplotlib>=3.8
 folium>=0.15
+requests>=2.31
