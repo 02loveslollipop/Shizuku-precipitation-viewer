@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 class Config:
     database_url: str
     blob_token: str
-    blob_api_url: str
     blob_base_url: str
     grid_interval: timedelta
     grid_resolution_m: int
@@ -46,7 +45,6 @@ def load() -> Config:
     if not blob_token:
         raise RuntimeError("VERCEL_BLOB_RW_TOKEN is required for ETL service")
 
-    blob_api_url = os.getenv("VERCEL_BLOB_API_URL", "https://api.vercel.com/v2/blob/upload")
     blob_base_url = os.getenv("VERCEL_BLOB_BASE_URL")
     if not blob_base_url:
         raise RuntimeError("VERCEL_BLOB_BASE_URL must be set (e.g. https://...vercel-storage.com)")
@@ -61,7 +59,6 @@ def load() -> Config:
     return Config(
         database_url=database_url,
         blob_token=blob_token,
-        blob_api_url=blob_api_url,
         blob_base_url=blob_base_url.rstrip('/'),
         grid_interval=timedelta(minutes=interval_min),
         grid_resolution_m=grid_resolution,

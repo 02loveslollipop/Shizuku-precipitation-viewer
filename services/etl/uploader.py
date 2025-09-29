@@ -5,7 +5,7 @@ import json
 from io import BytesIO
 
 import numpy as np
-import requests
+import vercel_blob
 
 from .config import Config
 
@@ -13,27 +13,21 @@ from .config import Config
 class BlobUploader:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.session = requests.Session()
-        self.session.headers.update({"Authorization": f"Bearer {cfg.blob_token}"})
+        # vercel_blob expects the token via environment variable
+        import os
 
-    def upload_bytes(self, key: str, data: bytes, content_type: str) -> str:
-        headers = {
-            "x-vercel-filename": key,
-            "x-vercel-blob-content-type": content_type,
-        }
-        response = self.session.post(
-            self.cfg.blob_api_url,
-            data=data,
-            headers=headers,
-            timeout=120,
-        )
-        response.raise_for_status()
-        info = response.json()
+        os.environ["BLOB_READ_WRITE_TOKEN"] = cfg.blob_token
+
+    def _resolve_url(self, info: dict, fallback_key: str) -> str:
         url = info.get("url") or info.get("downloadUrl")
         if url:
             return url
-        pathname = info.get("pathname") or key
+        pathname = info.get("pathname") or fallback_key
         return f"{self.cfg.blob_base_url}/{pathname.lstrip('/')}"
+
+    def upload_bytes(self, key: str, data: bytes, content_type: str) -> str:
+        info = vercel_blob.put(key, data, {"contentType": content_type})
+        return self._resolve_url(info, key)
 
     def upload_json(self, key: str, payload: dict) -> str:
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")

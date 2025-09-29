@@ -13,7 +13,6 @@ Python cron job that fetches cleaned precipitation snapshots, converts them into
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | ✅ | — | PostgreSQL connection string (`sslmode=require`). |
 | `VERCEL_BLOB_RW_TOKEN` | ✅ | — | Read/write token generated in Vercel (keep secret). |
-| `VERCEL_BLOB_API_URL` | ❌ | `https://api.vercel.com/v2/blob` | API endpoint used for uploads. |
 | `VERCEL_BLOB_BASE_URL` | ✅ | — | Public base URL for blobs (e.g. `https://*.vercel-storage.com`). |
 | `GRID_INTERVAL_MIN` | ❌ | `60` | Width of each snapshot window in minutes. |
 | `GRID_RESOLUTION_M` | ❌ | `500` | Grid spacing in metres. |
