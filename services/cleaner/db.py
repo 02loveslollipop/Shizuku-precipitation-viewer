@@ -92,8 +92,9 @@ class Database:
         return result.rowcount
 
     def fetch_raw_range(self, start, end) -> pd.DataFrame:
+        stmt = text(RAW_RANGE_QUERY)
         df = pd.read_sql(
-            RAW_RANGE_QUERY,
+            stmt,
             self.engine,
             params={"start": start, "end": end},
         )
@@ -106,4 +107,14 @@ class Database:
             row = conn.execute(sa.text(BOUNDS_QUERY)).first()
         if not row or row.min_ts is None or row.max_ts is None:
             return None, None
-        return pd.Timestamp(row.min_ts, tz="UTC"), pd.Timestamp(row.max_ts, tz="UTC")
+        min_ts = pd.Timestamp(row.min_ts)
+        max_ts = pd.Timestamp(row.max_ts)
+        if min_ts.tzinfo is None:
+            min_ts = min_ts.tz_localize("UTC")
+        else:
+            min_ts = min_ts.tz_convert("UTC")
+        if max_ts.tzinfo is None:
+            max_ts = max_ts.tz_localize("UTC")
+        else:
+            max_ts = max_ts.tz_convert("UTC")
+        return min_ts, max_ts

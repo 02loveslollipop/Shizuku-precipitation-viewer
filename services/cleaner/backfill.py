@@ -23,7 +23,7 @@ def run() -> None:
         cfg.dry_run,
     )
 
-    db = Database(cfg)
+    db = Database(cfg.database_url)
     min_ts, max_ts = db.raw_time_bounds()
     if not min_ts or not max_ts:
         logger.info("no raw measurements found")
