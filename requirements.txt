@@ -13,3 +13,4 @@ matplotlib>=3.8
 folium>=0.15
 requests>=2.31
 vercel-blob>=0.4
+plotly>=6.3.0

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 import json
 from typing import Iterable
 
 import matplotlib.pyplot as plt
-from matplotlib.contour import QuadContourSet
 from pyproj import Transformer
 
 
@@ -15,26 +14,21 @@ def generate_contours_geojson(x_grid, y_grid, data_grid, levels: Iterable[float]
     transformer = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
     fig, ax = plt.subplots()
     try:
-        contour_set: QuadContourSet = ax.contour(x_grid, y_grid, data_grid, levels=levels)
+        contour_set = ax.contour(x_grid, y_grid, data_grid, levels=levels)
         features = []
-        for collection in contour_set.collections:
-            level_value = float(collection.get_label()) if collection.get_label() else None
-            for path in collection.get_paths():
-                coords = path.vertices
-                if len(coords) < 2:
+        for level, segments in zip(contour_set.levels, contour_set.allsegs):
+            for seg in segments:
+                if len(seg) < 2:
                     continue
-                lon, lat = transformer.transform(coords[:, 0], coords[:, 1])
-                feature = {
-                    "type": "Feature",
-                    "properties": {},
-                    "geometry": {
-                        "type": "LineString",
-                        "coordinates": list(map(lambda pair: [pair[0], pair[1]], zip(lon, lat))),
-                    },
-                }
-                if level_value is not None:
-                    feature["properties"]["level"] = level_value
-                features.append(feature)
+                lon, lat = transformer.transform(seg[:, 0], seg[:, 1])
+                coords = [[float(lon_val), float(lat_val)] for lon_val, lat_val in zip(lon, lat)]
+                features.append(
+                    {
+                        "type": "Feature",
+                        "properties": {"level": float(level)},
+                        "geometry": {"type": "LineString", "coordinates": coords},
+                    }
+                )
     finally:
         plt.close(fig)
 
