@@ -17,18 +17,21 @@ class BlobUploader:
         self.session.headers.update({"Authorization": f"Bearer {cfg.blob_token}"})
 
     def upload_bytes(self, key: str, data: bytes, content_type: str) -> str:
-        files = {
-            "file": (key, data, content_type),
+        headers = {
+            "x-vercel-filename": key,
+            "x-vercel-blob-content-type": content_type,
         }
-        data_payload = {"name": key}
         response = self.session.post(
             self.cfg.blob_api_url,
-            files=files,
-            data=data_payload,
-            timeout=60,
+            data=data,
+            headers=headers,
+            timeout=120,
         )
         response.raise_for_status()
         info = response.json()
+        url = info.get("url") or info.get("downloadUrl")
+        if url:
+            return url
         pathname = info.get("pathname") or key
         return f"{self.cfg.blob_base_url}/{pathname.lstrip('/')}"
 
