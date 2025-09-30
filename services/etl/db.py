@@ -29,7 +29,7 @@ PENDING_SLOTS_SQL = sa.text(
     SELECT id, ts, res_m
     FROM grid_runs
     WHERE status = 'pending'
-    ORDER BY ts
+    ORDER BY ts DESC
     LIMIT :limit
     """
 )
