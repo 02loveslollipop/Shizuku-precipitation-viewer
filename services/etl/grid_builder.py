@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 import copy
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 from pyproj import Transformer
 from scipy.signal import convolve2d
+from scipy.interpolate import griddata
 
 from matplotlib import cm, colors
 import matplotlib.pyplot as plt
+from io import BytesIO
+from PIL import Image
 
 @dataclass(slots=True)
 class GridArtifacts:
@@ -20,10 +23,10 @@ class GridArtifacts:
     bbox_3857: Tuple[float, float, float, float]
     bbox_wgs84: Tuple[float, float, float, float]
     metadata_json: str
-    png_rgba: np.ndarray
     levels: np.ndarray
     thresholds: List[dict]
     intensity_classes: List[dict]
+    jpeg_bytes: Optional[bytes]
 
 
 INTENSITY_CLASSES = [
@@ -76,15 +79,24 @@ class GridBuilder:
                 seed_grid[gy, gx] = value
                 mask[gy, gx] = True
 
-        kernel = self._lanczos_kernel(radius=4, a=4)
-        seed_values = np.nan_to_num(seed_grid, nan=0.0)
-        seed_mask = (~np.isnan(seed_grid)).astype(float)
+        # Create meshgrid in EPSG:3857 (x_grid, y_grid are in metres)
+        xx, yy = np.meshgrid(x_grid, y_grid)
 
-        num = convolve2d(seed_values, kernel, mode="same", boundary="symm")
-        den = convolve2d(seed_mask, kernel, mode="same", boundary="symm")
+        # Prepare points for interpolation (sensor coordinates in 3857)
+        points = np.column_stack((snapshot_df["x"].to_numpy(), snapshot_df["y"].to_numpy()))
+        values = snapshot_df["value_mm"].to_numpy(dtype=float)
 
-        with np.errstate(divide="ignore", invalid="ignore"):
-            lanczos_grid = np.divide(num, den, out=np.full_like(num, np.nan), where=den > 0)
+        grid_points = np.column_stack((xx.ravel(), yy.ravel()))
+
+        # First attempt cubic (smooth quadratic-like) interpolation
+        quad_flat = griddata(points, values, grid_points, method="cubic")
+
+        # Fill any remaining gaps from cubic with nearest neighbour interpolation
+        if np.any(np.isnan(quad_flat)):
+            nearest_flat = griddata(points, values, grid_points, method="nearest")
+            quad_flat[np.isnan(quad_flat)] = nearest_flat[np.isnan(quad_flat)]
+
+        quad_grid = quad_flat.reshape(xx.shape)
 
         bbox_3857 = (float(min_x), float(min_y), float(max_x), float(max_y))
         west, south = self.to_wgs84.transform(min_x, min_y)
@@ -124,26 +136,39 @@ class GridBuilder:
             levels = np.array([t["value"] for t in thresholds], dtype=float)
         else:
             levels = np.linspace(
-                float(np.nanmin(lanczos_grid)),
-                float(np.nanmax(lanczos_grid)),
+                float(np.nanmin(quad_grid)),
+                float(np.nanmax(quad_grid)),
                 12,
             )
 
-        norm = colors.Normalize(vmin=np.nanmin(lanczos_grid), vmax=np.nanmax(lanczos_grid))
-        rgba = cm.get_cmap("viridis")(norm(lanczos_grid))
-        rgba[..., 3] = np.where(np.isnan(lanczos_grid), 0.0, 0.75)
+        # Also produce a compressed JPEG (RGB) for quick preview/storage. Convert colormap result
+        # to RGB and encode as JPEG with reasonable quality to save space.
+        try:
+            norm = colors.Normalize(vmin=np.nanmin(quad_grid), vmax=np.nanmax(quad_grid))
+            rgba = cm.get_cmap("viridis")(norm(quad_grid))
+            rgba[..., 3] = np.where(np.isnan(quad_grid), 0.0, 1.0)
+            rgb = np.delete(rgba, 3, axis=2)  # drop alpha
+            rgb_uint8 = (np.clip(rgb, 0.0, 1.0) * 255).astype(np.uint8)
+            # Flip vertically so the produced image aligns with map bounds
+            rgb_uint8 = np.flipud(rgb_uint8)
+            img = Image.fromarray(rgb_uint8)
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=70, optimize=True)
+            jpeg_bytes = buf.getvalue()
+        except Exception:
+            jpeg_bytes = None
 
         return GridArtifacts(
-            data_grid=lanczos_grid,
+            data_grid=quad_grid,
             x_coords=x_grid,
             y_coords=y_grid,
             bbox_3857=bbox_3857,
             bbox_wgs84=bbox_wgs84,
             metadata_json=json.dumps(metadata),
-            png_rgba=rgba,
             levels=levels,
             thresholds=thresholds,
             intensity_classes=copy.deepcopy(INTENSITY_CLASSES),
+            jpeg_bytes=jpeg_bytes,
         )
 
     @staticmethod

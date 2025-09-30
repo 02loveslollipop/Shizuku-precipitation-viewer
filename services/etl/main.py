@@ -88,11 +88,20 @@ def run():
                 "application/geo+json",
             )
 
+            # Upload JPEG preview if the artifact provided one
+            jpeg_url = None
+            if getattr(artifact, 'jpeg_bytes', None):
+                try:
+                    jpeg_url = uploader.upload_bytes(f"{base_key}/preview.jpg", artifact.jpeg_bytes, "image/jpeg")
+                except Exception:
+                    jpeg_url = None
+
             metadata = json.loads(artifact.metadata_json)
             latest_payload = {
                 "timestamp": metadata["timestamp"],
                 "grid_npz_url": npz_url,
                 "grid_json_url": grid_json_url,
+                "grid_preview_jpeg_url": jpeg_url,
                 "contours_url": contours_url,
                 "res_m": cfg.grid_resolution_m,
                 "bbox": metadata["bbox_wgs84"],
