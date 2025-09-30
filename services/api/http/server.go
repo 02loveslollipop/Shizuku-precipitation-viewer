@@ -79,6 +79,48 @@ func (s *Server) registerRoutes() {
 	s.engine.GET("/grid/latest", s.handleGridLatest)
 	s.engine.GET("/grid/available", s.handleGridAvailable)
 	s.engine.GET("/grid/:timestamp", s.handleGridByTimestamp)
+
+	// Snapshot endpoint: returns one measurement per sensor at-or-before ts
+	// Example: GET /snapshot?ts=2025-09-30T12:00:00Z&clean=true
+	s.engine.GET("/snapshot", s.handleSnapshotAt)
+}
+
+func (s *Server) handleSnapshotAt(c *gin.Context) {
+	tsStr := c.Query("ts")
+	if tsStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ts query parameter required (RFC3339)"})
+		return
+	}
+	ts, err := time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ts format, expected RFC3339"})
+		return
+	}
+
+	useClean := true
+	if cleanStr := c.Query("clean"); cleanStr != "" {
+		if val, err := strconv.ParseBool(cleanStr); err == nil {
+			useClean = val
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid clean parameter"})
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	snaps, err := s.store.SnapshotAtTimestamp(ctx, ts, useClean)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Build response: include requested timestamp and measurements
+	c.JSON(http.StatusOK, gin.H{
+		"requested_ts": ts.Format(time.RFC3339),
+		"measurements": snaps,
+	})
 }
 
 func bearerAuthMiddleware(expected string) gin.HandlerFunc {

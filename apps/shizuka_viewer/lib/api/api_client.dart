@@ -438,6 +438,63 @@ class ApiClient {
     }
   }
 
+  /// Fetch a snapshot of measurements for all sensors at-or-before [timestamp].
+  /// Calls GET /snapshot?ts=<rfc3339>&clean=true and returns a list of
+  /// SensorMeasurement where missing measurement values are represented with
+  /// valueMm = 0 and timestamp = DateTime.now().toUtc() (to match existing
+  /// client behavior).
+  Future<List<SensorMeasurement>> fetchMeasurementsSnapshot(
+    DateTime timestamp, {
+    bool clean = true,
+  }) async {
+    final tsStr = timestamp.toUtc().toIso8601String();
+    final uri = Uri.parse(
+      '$apiBaseUrl/snapshot?ts=$tsStr&clean=${clean ? 'true' : 'false'}',
+    );
+    final resp = await _client.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception('Failed to load snapshot (${resp.statusCode})');
+    }
+    final json = jsonDecode(resp.body) as Map<String, dynamic>;
+    final measurements = <SensorMeasurement>[];
+    final entries = json['measurements'] as List<dynamic>? ?? [];
+
+    for (final e in entries) {
+      if (e is! Map<String, dynamic>) continue;
+      final id = e['id'] as String?;
+      if (id == null) continue;
+      final name = e['name'] as String?;
+      final city = e['city'] as String?;
+      final lat = (e['lat'] as num?)?.toDouble() ?? 0.0;
+      final lon = (e['lon'] as num?)?.toDouble() ?? 0.0;
+
+      double value = 0.0;
+      DateTime ts = DateTime.now().toUtc();
+      if (e['value_mm'] != null) {
+        value = (e['value_mm'] as num).toDouble();
+      }
+      if (e['ts'] != null) {
+        try {
+          ts = DateTime.parse(e['ts'] as String).toUtc();
+        } catch (_) {}
+      }
+
+      measurements.add(
+        SensorMeasurement(
+          sensorId: id,
+          name: name,
+          city: city,
+          lat: lat,
+          lon: lon,
+          valueMm: value,
+          timestamp: ts,
+        ),
+      );
+    }
+
+    return measurements;
+  }
+
   void dispose() {
     _client.close();
   }

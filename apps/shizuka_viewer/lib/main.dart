@@ -194,6 +194,8 @@ class _HomePageState extends State<HomePage> {
     if (cachedOverlay != null && cachedSnapshot != null) {
       print('Using cached grid data for timestamp: ${timestamp}');
       if (!mounted) return;
+      // Ensure pins are refreshed from API before applying cached overlay
+      await _refreshAndApplyMeasurementsForTimestamp(timestamp);
       setState(() {
         if (_selectedTimestamp == timestamp) {
           _updateActiveOverlay(cachedSnapshot, cachedOverlay);
@@ -944,8 +946,14 @@ class _HomePageState extends State<HomePage> {
     // Cancel any pending debounce timer
     _debounceTimer?.cancel();
     // Start a new timer to update data after 1 second
-    _debounceTimer = Timer(const Duration(seconds: 1), () {
+    _debounceTimer = Timer(const Duration(seconds: 1), () async {
       print('Debounced slider change executing for timestamp: ${target}');
+
+      // Always refresh sensor measurements from API for the target timestamp
+      // This ensures pins reflect the latest station data before applying
+      // gridded overrides.
+      await _refreshAndApplyMeasurementsForTimestamp(target);
+
       final cachedOverlay = _gridOverlays[target];
       final cachedSnapshot = _gridSnapshots[target];
 
@@ -959,9 +967,57 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (cachedOverlay == null || cachedSnapshot == null) {
-        _ensureGridLoaded(target);
+        await _ensureGridLoaded(target);
       }
     });
+  }
+
+  /// Fetch latest sensor measurements from the API and then, if a grid
+  /// snapshot for [timestamp] is already available, apply sampled overrides
+  /// so pins reflect grid values. This is intentionally forced on timeline
+  /// changes so pins always show up-to-date station values and then the
+  /// gridded values are applied.
+  Future<void> _refreshAndApplyMeasurementsForTimestamp(
+    DateTime timestamp,
+  ) async {
+    try {
+      // Try the snapshot endpoint (one request for all sensors at-or-before timestamp).
+      List<SensorMeasurement> sensors;
+      try {
+        sensors = await _apiClient.fetchMeasurementsSnapshot(
+          timestamp,
+          clean: true,
+        );
+      } catch (e) {
+        // If snapshot endpoint is not available or fails, fall back to the
+        // existing /sensor + /now approach.
+        if (!e.toString().contains('Failed to load snapshot')) {
+          print('Snapshot fetch failed: $e');
+        }
+        sensors = await _apiClient.fetchLatestMeasurements();
+      }
+      if (!mounted) return;
+
+      // Update measurements with fresh API values first
+      setState(() {
+        _measurements = sensors;
+      });
+
+      // If we already have a grid snapshot for this timestamp, sample and
+      // override sensor values so pins reflect the grid.
+      final snapshot = _gridSnapshots[timestamp];
+      if (snapshot != null) {
+        _updateSensorsFromGrid(snapshot);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      // Suppress abort/cancel errors as they're expected in some network
+      // environments. Log others for debugging.
+      if (!e.toString().contains('aborted') &&
+          !e.toString().contains('AbortError')) {
+        print('Error refreshing sensor measurements: $e');
+      }
+    }
   }
 
   Future<_GridOverlayAssets?> _buildGridOverlay(GridSnapshot snapshot) async {
@@ -1077,6 +1133,9 @@ class _HomePageState extends State<HomePage> {
       final cachedSnapshot = _gridSnapshots[timestamp];
 
       if (cachedOverlay != null && cachedSnapshot != null) {
+        // Refresh sensor measurements before applying the cached overlay so
+        // pins reflect the freshest station values prior to overlay.
+        await _refreshAndApplyMeasurementsForTimestamp(timestamp);
         setState(() {
           _selectedTimestamp = timestamp;
           _activeTimelineIndex = _timeline.indexOf(timestamp);
@@ -1123,6 +1182,11 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
+      // Before caching and updating UI, refresh station measurements so
+      // pins first show fresh API values; the subsequent _updateActiveOverlay
+      // will sample the grid and override them as needed.
+      await _refreshAndApplyMeasurementsForTimestamp(timestamp);
+
       // Cache and update UI
       setState(() {
         _gridSnapshots[timestamp] = snapshot;
@@ -1165,7 +1229,7 @@ class _SensorMarker extends StatelessWidget {
     final severityKey = pinSeverityKey(measurement.valueMm);
     final severityLabel = LanguageScope.of(context).t(severityKey);
     final tooltip =
-        '${measurement.name ?? measurement.sensorId}\n${measurement.valueMm.toStringAsFixed(2)} mm • $severityLabel\nLat: ${measurement.lat.toStringAsFixed(4)}, Lon: ${measurement.lon.toStringAsFixed(4)}\nAddress: Pending lookup';
+        '${measurement.name ?? measurement.sensorId}\n${measurement.valueMm.toStringAsFixed(4)} mm • $severityLabel\nLat: ${measurement.lat.toStringAsFixed(4)}, Lon: ${measurement.lon.toStringAsFixed(4)}\nAddress: Pending lookup';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,

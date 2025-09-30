@@ -275,3 +275,100 @@ func (s *Store) GetGridByTimestamp(ctx context.Context, timestamp time.Time) (*G
 
 	return &g, nil
 }
+
+// SensorSnapshot represents a sensor with an optional measurement at or before
+// the requested timestamp.
+type SensorSnapshot struct {
+	ID         string   `json:"id"`
+	Name       *string  `json:"name,omitempty"`
+	ProviderID *string  `json:"provider_id,omitempty"`
+	Lat        float64  `json:"lat"`
+	Lon        float64  `json:"lon"`
+	City       *string  `json:"city,omitempty"`
+
+	// Measurement fields (may be nil if no measurement exists <= requested ts)
+	Ts         *time.Time `json:"ts,omitempty"`
+	ValueMM    *float64   `json:"value_mm,omitempty"`
+	QCFlags    *int32     `json:"qc_flags,omitempty"`
+	Imputation *string    `json:"imputation_method,omitempty"`
+	Quality    *float64   `json:"quality,omitempty"`
+	Source     *string    `json:"source,omitempty"`
+}
+
+// SnapshotAtTimestamp returns one row per sensor with the latest measurement
+// at-or-before the given timestamp. If useClean is true the query reads from
+// clean_measurements; otherwise it reads raw_measurements. Measurement fields
+// are nullable when no measurement exists.
+func (s *Store) SnapshotAtTimestamp(ctx context.Context, ts time.Time, useClean bool) ([]SensorSnapshot, error) {
+	// Build lateral subquery depending on clean/raw
+	var sub string
+	if useClean {
+		// clean measurements don't have quality/source in schema; return NULLs for those
+		sub = `(
+			SELECT sensor_id, ts, value_mm, qc_flags, imputation_method, NULL::double precision AS quality, NULL::text AS source
+			FROM clean_measurements
+			WHERE sensor_id = sensors.id AND ts <= $1
+			ORDER BY ts DESC
+			LIMIT 1
+		)`
+	} else {
+		sub = `(
+			SELECT sensor_id, ts, value_mm, NULL::integer AS qc_flags, NULL::text AS imputation_method, quality, source
+			FROM raw_measurements
+			WHERE sensor_id = sensors.id AND ts <= $1
+			ORDER BY ts DESC
+			LIMIT 1
+		)`
+	}
+
+	sql := `SELECT sensors.id, sensors.name, sensors.provider_id, sensors.lat, sensors.lon, sensors.city,
+		m.ts, m.value_mm, m.qc_flags, m.imputation_method, m.quality, m.source
+		FROM sensors
+		LEFT JOIN LATERAL ` + sub + ` m ON true
+		ORDER BY sensors.id`
+
+	rows, err := s.pool.Query(ctx, sql, ts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]SensorSnapshot, 0)
+	for rows.Next() {
+		var rec SensorSnapshot
+		var mTs *time.Time
+		var mValue *float64
+		var mQc *int32
+		var mImp *string
+		var mQuality *float64
+		var mSource *string
+
+		if err := rows.Scan(
+			&rec.ID,
+			&rec.Name,
+			&rec.ProviderID,
+			&rec.Lat,
+			&rec.Lon,
+			&rec.City,
+			&mTs,
+			&mValue,
+			&mQc,
+			&mImp,
+			&mQuality,
+			&mSource,
+		); err != nil {
+			return nil, err
+		}
+
+		rec.Ts = mTs
+		rec.ValueMM = mValue
+		rec.QCFlags = mQc
+		rec.Imputation = mImp
+		rec.Quality = mQuality
+		rec.Source = mSource
+
+		out = append(out, rec)
+	}
+
+	return out, rows.Err()
+}
