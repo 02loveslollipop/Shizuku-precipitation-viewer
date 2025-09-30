@@ -271,9 +271,9 @@ func (s *Server) handleGridAvailable(c *gin.Context) {
 		"timestamps": timestampStrings,
 	}
 
-	// Add latest timestamp if available
+	// Add latest timestamp if available (timestamps are ordered ASC; pick last element)
 	if len(timestamps) > 0 {
-		response["latest"] = timestamps[0].Format(time.RFC3339) // First element is latest due to DESC order
+		response["latest"] = timestamps[len(timestamps)-1].Format(time.RFC3339)
 	}
 
 	c.JSON(http.StatusOK, response)

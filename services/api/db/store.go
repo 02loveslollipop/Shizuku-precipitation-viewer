@@ -209,10 +209,10 @@ type GridInfo struct {
 }
 
 const availableGridsSQL = `
-    SELECT ts
-    FROM grid_runs
-    WHERE status = 'done'
-    ORDER BY ts DESC
+	SELECT ts
+	FROM grid_runs
+	WHERE status = 'done'
+	ORDER BY ts ASC
 `
 
 // GetAvailableGridTimestamps returns timestamps of all completed grids.
