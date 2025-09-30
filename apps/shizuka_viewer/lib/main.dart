@@ -408,8 +408,84 @@ class _HomePageState extends State<HomePage> {
               : (isMobile
                   // Mobile: map fills screen and sidebar is toggled via button
                   ? Stack(
-                      children: [
-                        Padding(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.06),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: _buildMap(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildTimelinePanel(theme),
+                          ],
+                        ),
+                      ),
+                      // Menu button to open sidebar
+                      Positioned(
+                        top: 20,
+                        left: 20,
+                        child: FloatingActionButton.small(
+                          onPressed:
+                              () => setState(
+                                () => _mobileSidebarOpen = !_mobileSidebarOpen,
+                              ),
+                          child: const Icon(Icons.menu),
+                        ),
+                      ),
+                      // Sidebar overlay
+                      if (_mobileSidebarOpen)
+                        Positioned.fill(
+                          child: Row(
+                            children: [
+                              // Sidebar panel (tap inside should not close)
+                              SizedBox(
+                                width: 260,
+                                child: Material(
+                                  elevation: 8,
+                                  child: SafeArea(child: _buildSidebar(theme)),
+                                ),
+                              ),
+                              // Backdrop: tapping closes the sidebar
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap:
+                                      () => setState(
+                                        () => _mobileSidebarOpen = false,
+                                      ),
+                                  child: Container(
+                                    color: Colors.black.withOpacity(0.35),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  )
+                  // Desktop/iPad: original layout with left sidebar
+                  : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSidebar(theme),
+                      Expanded(
+                        child: Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Column(
                             children: [
@@ -437,77 +513,9 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         ),
-                        // Menu button to open sidebar
-                        Positioned(
-                          top: 20,
-                          left: 20,
-                          child: FloatingActionButton.small(
-                            onPressed: () => setState(() => _mobileSidebarOpen = !_mobileSidebarOpen),
-                            child: const Icon(Icons.menu),
-                          ),
-                        ),
-                        // Sidebar overlay
-                        if (_mobileSidebarOpen)
-                          Positioned.fill(
-                            child: Row(
-                              children: [
-                                // Sidebar panel (tap inside should not close)
-                                SizedBox(
-                                  width: 260,
-                                  child: Material(
-                                    elevation: 8,
-                                    child: SafeArea(child: _buildSidebar(theme)),
-                                  ),
-                                ),
-                                // Backdrop: tapping closes the sidebar
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _mobileSidebarOpen = false),
-                                    child: Container(color: Colors.black.withOpacity(0.35)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    )
-                  // Desktop/iPad: original layout with left sidebar
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSidebar(theme),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(18),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.06),
-                                          blurRadius: 16,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(18),
-                                      child: _buildMap(),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                _buildTimelinePanel(theme),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )),
+                      ),
+                    ],
+                  )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _loadData(),
         icon: const Icon(Icons.refresh),
