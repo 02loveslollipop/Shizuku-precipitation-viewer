@@ -34,7 +34,7 @@ Material-themed viewer that overlays precipitation data on a Mapbox basemap (via
 flutter run -d <device>
 ```
 
-The viewer consumes the deployed Shizuku REST API (default base URL `https://api.shizuka.02labs.me`).
+The viewer consumes the deployed Shizuku REST API (default base URL `https://api.shizuku.02labs.me`).
 
 ## Project structure
 

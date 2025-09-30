@@ -6,7 +6,11 @@ import '../api/api_client.dart';
 import '../app_constants.dart';
 
 class SensorDetailSheet extends StatelessWidget {
-  const SensorDetailSheet({super.key, required this.measurement, required this.history});
+  const SensorDetailSheet({
+    super.key,
+    required this.measurement,
+    required this.history,
+  });
 
   final SensorMeasurement measurement;
   final List<SeriesPoint> history;
@@ -15,6 +19,8 @@ class SensorDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final intensity = findIntensityClass(measurement.valueMm);
+    final severity = pinSeverityLabel(measurement.valueMm);
+    final severityColor = colorForPinMeasurement(measurement.valueMm);
     final formatter = DateFormat('MMM d, HH:mm');
 
     return Padding(
@@ -28,11 +34,30 @@ class SensorDetailSheet extends StatelessWidget {
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          Text('Location: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}'),
-          const Text('Address: Mocked via Mapbox (todo)'),
+          Text(
+            'Location: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}',
+          ),
+          const Text('Address: Not available'),
           Text('Measurement: ${measurement.valueMm.toStringAsFixed(2)} mm'),
           Text('Intensity: ${intensity.label}'),
-          Text('Timestamp: ${formatter.format(measurement.timestamp.toLocal())}'),
+          Row(
+            children: [
+              const Text('Severity: '),
+              Container(
+                width: 10,
+                height: 10,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: severityColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              Text(severity),
+            ],
+          ),
+          Text(
+            'Timestamp: ${formatter.format(measurement.timestamp.toLocal())}',
+          ),
           const SizedBox(height: 12),
           if (history.isEmpty)
             const Text('No historical data available.')
@@ -49,7 +74,7 @@ class SensorDetailSheet extends StatelessWidget {
                     LineChartBarData(
                       spots: [
                         for (int i = 0; i < history.length; i++)
-                          FlSpot(i.toDouble(), history[i].value)
+                          FlSpot(i.toDouble(), history[i].value),
                       ],
                       isCurved: true,
                       color: shizukuPrimary,
@@ -59,7 +84,7 @@ class SensorDetailSheet extends StatelessWidget {
                         show: true,
                         color: shizukuPrimary.withOpacity(0.2),
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -71,7 +96,7 @@ class SensorDetailSheet extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
-          )
+          ),
         ],
       ),
     );

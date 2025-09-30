@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 import '../app_constants.dart';
 
@@ -39,6 +41,32 @@ class GridSnapshot {
   final List<List<double>> data;
   final List<double> intensityThresholds;
   final List<GridContourFeature> contours;
+}
+
+class GridSource {
+  GridSource({required this.gridUrl, this.contoursUrl});
+
+  final String gridUrl;
+  final String? contoursUrl;
+}
+
+class GridHistoryEntry {
+  GridHistoryEntry({required this.timestamp, required this.source});
+
+  final DateTime timestamp;
+  final GridSource source;
+}
+
+class GridLatestBundle {
+  GridLatestBundle({
+    required this.snapshot,
+    required this.source,
+    required this.history,
+  });
+
+  final GridSnapshot snapshot;
+  final GridSource source;
+  final List<GridHistoryEntry> history;
 }
 
 class Sensor {
@@ -211,121 +239,92 @@ class ApiClient {
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
-  Future<GridSnapshot?> fetchLatestGrid() async {
+  Future<GridLatestBundle?> fetchLatestGridBundle() async {
     try {
       final resp = await _client.get(Uri.parse('$apiBaseUrl/grid/latest'));
       if (resp.statusCode != 200) {
         return null;
       }
 
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      final gridUrl = body['grid_url'] as String?;
-      if (gridUrl == null || gridUrl.isEmpty) {
+      final pointerLocation = (jsonDecode(resp.body) as Map<String, dynamic>)[
+          'grid_url'] as String?;
+      if (pointerLocation == null || pointerLocation.isEmpty) {
         return null;
       }
 
-      final pointerResp = await _client.get(Uri.parse(gridUrl));
+      final pointerResp = await _client.get(Uri.parse(pointerLocation));
       if (pointerResp.statusCode != 200) {
         return null;
       }
 
-      final pointerJson = jsonDecode(pointerResp.body) as Map<String, dynamic>;
-      final gridJsonUrl = pointerJson['grid_json_url'] as String?;
-      final contoursUrl = pointerJson['contours_url'] as String?;
-      if (gridJsonUrl == null || gridJsonUrl.isEmpty) {
+      final pointer = jsonDecode(pointerResp.body) as Map<String, dynamic>;
+      final pointerTimestamp = _tryParseTimestamp(pointer['timestamp']);
+
+      final snapshotSource = _parseGridSource(
+        gridUrl: pointer['grid_json_url'] as String?,
+        gridPath: pointer['grid_json_path'] as String?,
+        contoursUrl: pointer['contours_url'] as String?,
+        contoursPath: pointer['contours_path'] as String?,
+        timestamp: pointerTimestamp,
+      );
+      if (snapshotSource == null) {
         return null;
       }
 
-      final gridResp = await _client.get(Uri.parse(gridJsonUrl));
-      if (gridResp.statusCode != 200) {
-        return null;
-      }
-      final gridBytes = gridResp.bodyBytes;
-      final decompressed = utf8.decode(GZipDecoder().decodeBytes(gridBytes));
-      final gridJson = jsonDecode(decompressed) as Map<String, dynamic>;
-
-      final data = <List<double>>[];
-      final rows = gridJson['data'] as List<dynamic>?;
-      if (rows != null) {
-        for (final row in rows) {
-          final list =
-              (row as List<dynamic>)
-                  .map((value) => (value as num).toDouble())
-                  .toList();
-          data.add(list);
-        }
-      }
-
-      if (data.isEmpty) {
+      final snapshot = await fetchGridByUrl(
+        snapshotSource.gridUrl,
+        contoursUrl: snapshotSource.contoursUrl,
+      );
+      if (snapshot == null) {
         return null;
       }
 
-      final bbox = (gridJson['bbox_wgs84'] as List<dynamic>).cast<num>();
-      final west = bbox[0].toDouble();
-      final south = bbox[1].toDouble();
-      final east = bbox[2].toDouble();
-      final north = bbox[3].toDouble();
-
-      final thresholdsDynamic =
-          gridJson['intensity_thresholds'] as List<dynamic>? ?? const [];
-      final thresholds =
-          thresholdsDynamic
-              .map((entry) => (entry['value'] as num).toDouble())
-              .toList();
-
-      final timestampStr = gridJson['timestamp'] as String?;
-      final timestamp =
-          timestampStr != null
-              ? DateTime.parse(timestampStr).toUtc()
-              : DateTime.now().toUtc();
-
-      final contourFeatures = <GridContourFeature>[];
-      if (contoursUrl != null && contoursUrl.isNotEmpty) {
-        final contourResp = await _client.get(Uri.parse(contoursUrl));
-        if (contourResp.statusCode == 200) {
-          final contourJson =
-              jsonDecode(contourResp.body) as Map<String, dynamic>;
-          final features = contourJson['features'] as List<dynamic>?;
-          if (features != null) {
-            for (final feature in features) {
-              final props = feature['properties'] as Map<String, dynamic>?;
-              final geometry = feature['geometry'] as Map<String, dynamic>?;
-              if (props == null || geometry == null) {
-                continue;
-              }
-              final coords =
-                  (geometry['coordinates'] as List<dynamic>?)
-                      ?.map(
-                        (pair) =>
-                            (pair as List<dynamic>)
-                                .map((v) => (v as num).toDouble())
-                                .toList(),
-                      )
-                      .toList() ??
-                  const [];
-              contourFeatures.add(
-                GridContourFeature(
-                  coordinates: coords,
-                  thresholdMm: (props['threshold_mm'] as num?)?.toDouble() ?? 0,
-                  category: props['category'] as String? ?? 'Contour',
-                  nextCategory: props['next_category'] as String?,
-                ),
-              );
-            }
+      final history = <GridHistoryEntry>[];
+      final historyNodes = pointer['history'];
+      if (historyNodes is List) {
+        for (final node in historyNodes) {
+          if (node is! Map<String, dynamic>) continue;
+          final entryTimestamp = _tryParseTimestamp(node['timestamp']);
+          if (entryTimestamp == null || entryTimestamp == snapshot.timestamp) {
+            continue;
+          }
+          final source = _parseGridSource(
+            gridUrl: node['grid_json_url'] as String?,
+            gridPath: node['grid_json_path'] as String?,
+            contoursUrl: node['contours_url'] as String?,
+            contoursPath: node['contours_path'] as String?,
+            timestamp: entryTimestamp,
+          );
+          if (source != null) {
+            history.add(GridHistoryEntry(timestamp: entryTimestamp, source: source));
           }
         }
       }
 
-      return GridSnapshot(
-        timestamp: timestamp,
-        west: west,
-        south: south,
-        east: east,
-        north: north,
-        data: data,
-        intensityThresholds: thresholds,
-        contours: contourFeatures,
+      history.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      return GridLatestBundle(
+        snapshot: snapshot,
+        source: snapshotSource,
+        history: history,
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<GridSnapshot?> fetchGridByUrl(
+    String gridUrl, {
+    String? contoursUrl,
+  }) async {
+    try {
+      final gridResp = await _client.get(Uri.parse(gridUrl));
+      if (gridResp.statusCode != 200) {
+        return null;
+      }
+      final gridJson = _decodeGridJson(gridResp.bodyBytes);
+      final contourFeatures = await _fetchContours(contoursUrl);
+      return _parseGridSnapshot(gridJson, contourFeatures);
     } catch (_) {
       return null;
     }
@@ -333,5 +332,163 @@ class ApiClient {
 
   void dispose() {
     _client.close();
+  }
+
+  Map<String, dynamic> _decodeGridJson(Uint8List encoded) {
+    final decompressed = GZipDecoder().decodeBytes(encoded);
+    final jsonString = utf8.decode(decompressed);
+    return jsonDecode(jsonString) as Map<String, dynamic>;
+  }
+
+  Future<List<GridContourFeature>> _fetchContours(String? url) async {
+    if (url == null || url.isEmpty) {
+      return const [];
+    }
+    try {
+      final resp = await _client.get(Uri.parse(url));
+      if (resp.statusCode != 200) {
+        return const [];
+      }
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final features = body['features'];
+      if (features is! List) {
+        return const [];
+      }
+      return features
+          .whereType<Map<String, dynamic>>()
+          .map((feature) {
+            final props = feature['properties'] as Map<String, dynamic>?;
+            final geometry = feature['geometry'] as Map<String, dynamic>?;
+            if (props == null || geometry == null) {
+              return null;
+            }
+            final coords = (geometry['coordinates'] as List<dynamic>?)
+                    ?.map(
+                      (pair) =>
+                          (pair as List<dynamic>)
+                              .map((v) => (v as num).toDouble())
+                              .toList(),
+                    )
+                    .toList() ??
+                const [];
+            return GridContourFeature(
+              coordinates: coords,
+              thresholdMm: (props['threshold_mm'] as num?)?.toDouble() ?? 0,
+              category: props['category'] as String? ?? 'Contour',
+              nextCategory: props['next_category'] as String?,
+            );
+          })
+          .whereType<GridContourFeature>()
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  GridSnapshot? _parseGridSnapshot(
+    Map<String, dynamic> gridJson,
+    List<GridContourFeature> contours,
+  ) {
+    final rows = gridJson['data'] as List<dynamic>?;
+    if (rows == null || rows.isEmpty) {
+      return null;
+    }
+
+    final data = <List<double>>[];
+    for (final row in rows) {
+      if (row is List) {
+        data.add(row.map((value) => (value as num).toDouble()).toList());
+      }
+    }
+    if (data.isEmpty) {
+      return null;
+    }
+
+    final bbox = (gridJson['bbox_wgs84'] as List<dynamic>?)?.cast<num>();
+    if (bbox == null || bbox.length < 4) {
+      return null;
+    }
+
+    final thresholdsDynamic =
+        gridJson['intensity_thresholds'] as List<dynamic>? ?? const [];
+    final thresholds = thresholdsDynamic
+        .whereType<Map<String, dynamic>>()
+        .map((entry) => (entry['value'] as num).toDouble())
+        .toList();
+
+    final timestampStr = gridJson['timestamp'] as String?;
+    final timestamp = timestampStr != null
+        ? DateTime.parse(timestampStr).toUtc()
+        : DateTime.now().toUtc();
+
+    return GridSnapshot(
+      timestamp: timestamp,
+      west: bbox[0].toDouble(),
+      south: bbox[1].toDouble(),
+      east: bbox[2].toDouble(),
+      north: bbox[3].toDouble(),
+      data: data,
+      intensityThresholds: thresholds,
+      contours: contours,
+    );
+  }
+
+  GridSource? _parseGridSource({
+    String? gridUrl,
+    String? gridPath,
+    String? contoursUrl,
+    String? contoursPath,
+    DateTime? timestamp,
+  }) {
+    final resolvedGridUrl =
+        _resolveUrl(gridUrl ?? gridPath, timestamp, 'grid.json.gz');
+    if (resolvedGridUrl == null) {
+      return null;
+    }
+    final resolvedContours =
+        _resolveUrl(contoursUrl ?? contoursPath, timestamp, 'contours.geojson');
+    return GridSource(gridUrl: resolvedGridUrl, contoursUrl: resolvedContours);
+  }
+
+  String? _resolveUrl(String? candidate, DateTime? timestamp, String fallbackFile) {
+    if (candidate != null && candidate.isNotEmpty) {
+      return _ensureAbsoluteUrl(candidate);
+    }
+    if (timestamp == null) {
+      return null;
+    }
+    final key = _timestampKey(timestamp);
+    return _ensureAbsoluteUrl('grids/$key/$fallbackFile');
+  }
+
+  String? _ensureAbsoluteUrl(String candidate) {
+    if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+      return candidate;
+    }
+    final trimmed = candidate.startsWith('/') ? candidate.substring(1) : candidate;
+    final base = blobBaseUrl.replaceAll(RegExp(r'/+$'), '');
+    final buffer = StringBuffer(base);
+    if (buffer.isNotEmpty) {
+      buffer.write('/');
+    }
+    buffer.write(trimmed);
+    return buffer.toString();
+  }
+
+  String _timestampKey(DateTime timestamp) {
+    final utc = timestamp.toUtc();
+    final formatter = DateFormat("yyyyMMdd'T'HHmmss'Z'");
+    return formatter.format(utc);
+  }
+
+  DateTime? _tryParseTimestamp(dynamic value) {
+    if (value is String && value.isNotEmpty) {
+      try {
+        return DateTime.parse(value).toUtc();
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 }
