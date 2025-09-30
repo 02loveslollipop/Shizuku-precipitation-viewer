@@ -94,21 +94,21 @@ class _HomePageState extends State<HomePage> {
         _errorMessage = null;
       });
       // For initial load, use progressive loading approach
-      await _loadDataProgressive();
+      await _loadDataProgressive(initial: true, silent: silent);
     } else if (!silent) {
       setState(() {
         _isGridLoading = true;
       });
       // For refresh, still use the old approach for now
-      await _loadDataLegacy();
+      await _loadDataLegacy(silent: false);
     } else {
       // Silent refresh
-      await _loadDataLegacy();
+      await _loadDataLegacy(silent: true);
     }
     _refreshInFlight = false;
   }
 
-  Future<void> _loadDataProgressive() async {
+  Future<void> _loadDataProgressive({bool initial = false, bool silent = false}) async {
     try {
       // Load measurements and grid availability in parallel
       final measurementsFuture = _apiClient.fetchLatestMeasurements();
@@ -127,25 +127,53 @@ class _HomePageState extends State<HomePage> {
       if (availability != null && availability.timestamps.isNotEmpty) {
         // Preserve existing cached data when updating timeline
         final newTimeline = availability.timestamps;
+        // Determine previous latest to decide whether we should auto-advance
+        final previousLatest = _timeline.isNotEmpty ? _timeline.last : null;
+        final wasSelectedLatest = previousLatest != null &&
+            _selectedTimestamp != null &&
+            _selectedTimestamp == previousLatest;
 
-        // Only update timeline if it's different to preserve state
-        if (_timeline.isEmpty || !_listsEqual(_timeline, newTimeline)) {
+        // Update the timeline if it changed
+        final timelineChanged = _timeline.isEmpty || !_listsEqual(_timeline, newTimeline);
+        if (timelineChanged) {
           _timeline = newTimeline;
         }
 
-        // Load latest grid data and set as active
-        final latestTimestamp =
-            availability.latest ?? availability.timestamps.last;
+        // Resolve the canonical latest timestamp from availability
+        final latestTimestamp = availability.latest ?? _timeline.last;
 
-        setState(() {
-          // If availability.latest corresponds to an index in the timeline,
-          // use that index. Otherwise fall back to the final index.
-          final idx = _timeline.indexOf(latestTimestamp);
-          _activeTimelineIndex = idx >= 0 ? idx : (_timeline.length - 1);
-          _selectedTimestamp = latestTimestamp;
-        });
-
-        await _loadGridForTimestamp(latestTimestamp, isInitial: true);
+        if (initial) {
+          // First load: set selection to latest and load grid
+          setState(() {
+            final idx = _timeline.indexOf(latestTimestamp);
+            _activeTimelineIndex = idx >= 0 ? idx : (_timeline.length - 1);
+            _selectedTimestamp = latestTimestamp;
+          });
+          await _loadGridForTimestamp(latestTimestamp, isInitial: true);
+        } else {
+          // Non-initial (periodic or manual refresh):
+          if (wasSelectedLatest) {
+            // If user was at the latest point, advance to the new latest,
+            // fetch sensors for that time and force-refresh overlays.
+            setState(() {
+              final idx = _timeline.indexOf(latestTimestamp);
+              _activeTimelineIndex = idx >= 0 ? idx : (_timeline.length - 1);
+              _selectedTimestamp = latestTimestamp;
+              _isGridLoading = true;
+            });
+            // Refresh grid/overlays for the new selected latest
+            await _loadGridForTimestamp(latestTimestamp);
+          } else {
+            // User is looking at an older time: do not move selection or
+            // re-render overlays. Just update timeline entries if changed.
+            if (timelineChanged) {
+              setState(() {
+                // only update the timeline list UI; do not change selection
+              });
+            }
+            // No further action: keep current selection and overlays
+          }
+        }
       } else {
         setState(() {
           _isLoading = false;
@@ -168,10 +196,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _loadDataLegacy() async {
+  Future<void> _loadDataLegacy({bool silent = false}) async {
     try {
       // Use progressive loading for refreshes too to preserve state
-      await _loadDataProgressive();
+      await _loadDataProgressive(silent: silent);
     } catch (e) {
       if (!mounted) return;
       // Don't show abort errors as user-facing errors
@@ -192,7 +220,6 @@ class _HomePageState extends State<HomePage> {
     final cachedOverlay = _gridOverlays[timestamp];
     final cachedSnapshot = _gridSnapshots[timestamp];
     if (cachedOverlay != null && cachedSnapshot != null) {
-      print('Using cached grid data for timestamp: ${timestamp}');
       if (!mounted) return;
       // Ensure pins are refreshed from API before applying cached overlay
       await _refreshAndApplyMeasurementsForTimestamp(timestamp);
@@ -243,7 +270,6 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _gridSnapshots[timestamp] = snapshot;
         _gridOverlays[timestamp] = overlay;
-        print('Cached grid data for timestamp: ${timestamp}');
         if (_selectedTimestamp == timestamp) {
           _updateActiveOverlay(snapshot, overlay);
           _isGridLoading = false;
@@ -254,18 +280,13 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _isGridLoading = false;
       });
-      // Don't log abort errors as they're expected when requests are cancelled
-      if (!e.toString().contains('aborted') &&
-          !e.toString().contains('AbortError')) {
-        print('Error loading grid for timestamp $timestamp: $e');
-      }
+      // Suppress logging for aborted/cancelled requests; other errors are
+      // intentionally not logged here to avoid noisy output in production.
     }
   }
 
   void _updateActiveOverlay(GridSnapshot snapshot, _GridOverlayAssets overlay) {
-    print(
-      'Applying grid overlay for timestamp: ${snapshot.timestamp} (${overlay.contours.length} contours, ${overlay.filledContours.length} filled contours)',
-    );
+    // Applied grid overlay for timestamp: ${snapshot.timestamp}
     _heatmapImage = overlay.heatmapPng;
     _gridBounds = overlay.bounds;
     _contourPolylines = overlay.contours;
@@ -305,7 +326,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _measurements = updated;
     });
-    print('Updated ${updated.length} sensors from grid ${snapshot.timestamp}');
+  // Updated ${updated.length} sensors from grid ${snapshot.timestamp}
   }
 
   double? _sampleGridValueAtLatLng(
@@ -947,7 +968,6 @@ class _HomePageState extends State<HomePage> {
     _debounceTimer?.cancel();
     // Start a new timer to update data after 1 second
     _debounceTimer = Timer(const Duration(seconds: 1), () async {
-      print('Debounced slider change executing for timestamp: ${target}');
 
       // Always refresh sensor measurements from API for the target timestamp
       // This ensures pins reflect the latest station data before applying
@@ -990,10 +1010,7 @@ class _HomePageState extends State<HomePage> {
         );
       } catch (e) {
         // If snapshot endpoint is not available or fails, fall back to the
-        // existing /sensor + /now approach.
-        if (!e.toString().contains('Failed to load snapshot')) {
-          print('Snapshot fetch failed: $e');
-        }
+        // existing /sensor + /now approach. Do not log to avoid noisy output.
         sensors = await _apiClient.fetchLatestMeasurements();
       }
       if (!mounted) return;
@@ -1013,10 +1030,9 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       // Suppress abort/cancel errors as they're expected in some network
       // environments. Log others for debugging.
-      if (!e.toString().contains('aborted') &&
-          !e.toString().contains('AbortError')) {
-        print('Error refreshing sensor measurements: $e');
-      }
+      // Errors are intentionally not logged to avoid polluting console output
+      // during normal operation. Aborted requests are common when users
+      // interact rapidly with the UI.
     }
   }
 
@@ -1191,7 +1207,6 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _gridSnapshots[timestamp] = snapshot;
         _gridOverlays[timestamp] = overlay;
-        print('Cached grid data for timestamp: ${timestamp}');
         _selectedTimestamp = timestamp;
         _activeTimelineIndex = _timeline.indexOf(timestamp);
         _updateActiveOverlay(snapshot, overlay);

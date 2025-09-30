@@ -417,9 +417,7 @@ class ApiClient {
       List<GridContourFeature> contourFeatures = const [];
       try {
         contourFeatures = await _fetchContours(contoursUrl);
-        if (contourFeatures.isNotEmpty) {
-          print('Fetched ${contourFeatures.length} contours');
-        }
+        // Contour features fetched; no logging to avoid analyzer warnings.
       } catch (e) {
         // If contour fetching fails, continue without contours
         // Don't log abort errors as they're expected
@@ -430,7 +428,7 @@ class ApiClient {
       }
       final snapshot = _parseGridSnapshot(gridJson, contourFeatures);
       if (snapshot != null) {
-        print('Fetched grid for timestamp: ${snapshot.timestamp}');
+        // grid fetched successfully; no debug logging in production build.
       }
       return snapshot;
     } catch (_) {
