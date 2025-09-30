@@ -8,7 +8,6 @@ from typing import List, Tuple
 import numpy as np
 from pyproj import Transformer
 from scipy.signal import convolve2d
-from scipy.spatial import cKDTree
 
 from matplotlib import cm, colors
 import matplotlib.pyplot as plt
@@ -86,15 +85,6 @@ class GridBuilder:
 
         with np.errstate(divide="ignore", invalid="ignore"):
             lanczos_grid = np.divide(num, den, out=np.full_like(num, np.nan), where=den > 0)
-
-        remaining = np.isnan(lanczos_grid)
-        if remaining.any():
-            valid_idx = np.column_stack(np.where(~remaining))
-            valid_vals = lanczos_grid[~remaining]
-            tree = cKDTree(valid_idx)
-            target_idx = np.column_stack(np.where(remaining))
-            _dist, nn = tree.query(target_idx)
-            lanczos_grid[remaining] = valid_vals[nn]
 
         bbox_3857 = (float(min_x), float(min_y), float(max_x), float(max_y))
         west, south = self.to_wgs84.transform(min_x, min_y)
