@@ -46,8 +46,10 @@ class LegendSheet extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   radius: 10,
-                  backgroundColor:
-                      colorForIntensityClass(cls, VisualizationMode.contour),
+                  backgroundColor: colorForIntensityClass(
+                    cls,
+                    VisualizationMode.heatmap,
+                  ),
                 ),
                 title: Text(cls.label),
                 subtitle: Text(cls.description),
@@ -66,7 +68,9 @@ class LegendSheet extends StatelessWidget {
             ),
             _pinLegendRow(
               context,
-              colorForPinMeasurement((pinGreenThresholdMm + pinAmberThresholdMm) / 2),
+              colorForPinMeasurement(
+                (pinGreenThresholdMm + pinAmberThresholdMm) / 2,
+              ),
               'Moderate',
               '${pinGreenThresholdMm.toStringAsFixed(0)} – ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
             ),
@@ -83,7 +87,12 @@ class LegendSheet extends StatelessWidget {
   }
 }
 
-Widget _pinLegendRow(BuildContext context, Color color, String label, String range) {
+Widget _pinLegendRow(
+  BuildContext context,
+  Color color,
+  String label,
+  String range,
+) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
@@ -101,10 +110,9 @@ Widget _pinLegendRow(BuildContext context, Color color, String label, String ran
               Text(label, style: Theme.of(context).textTheme.bodyMedium),
               Text(
                 range,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: shizukuPrimary.withOpacity(0.6)),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: shizukuPrimary.withOpacity(0.6),
+                ),
               ),
             ],
           ),

@@ -5,10 +5,18 @@ import '../app_constants.dart';
 import '../localization.dart';
 
 class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShizukuAppBar({super.key, required this.subtitle, this.onMenuTap});
+  const ShizukuAppBar({
+    super.key,
+    required this.subtitle,
+    this.onMenuTap,
+    this.mode,
+    this.onModeSelected,
+  });
 
   final String subtitle;
   final VoidCallback? onMenuTap;
+  final VisualizationMode? mode;
+  final ValueChanged<VisualizationMode>? onModeSelected;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -31,10 +39,20 @@ class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
           const SizedBox(width: 8), // Add left margin
           SvgPicture.asset('assets/icons/shizuku_logo.svg', height: 32),
           const SizedBox(width: 12),
-          Text(
-            'Shizuku - $subtitle',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Shizuku - $subtitle',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                if (onModeSelected != null && mode != null)
+                  _ModeSelector(mode: mode!, onSelected: onModeSelected!),
+              ],
             ),
           ),
         ],
@@ -60,6 +78,55 @@ class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.white,
       foregroundColor: shizukuPrimary,
       elevation: 1,
+    );
+  }
+}
+
+class _ModeSelector extends StatelessWidget {
+  const _ModeSelector({required this.mode, required this.onSelected});
+
+  final VisualizationMode mode;
+  final ValueChanged<VisualizationMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = {
+      VisualizationMode.heatmap: 'Grid',
+      VisualizationMode.realtime: 'Real-time',
+      VisualizationMode.dashboard: 'Dashboard',
+    };
+
+    return Row(
+      children: options.entries
+          .map((entry) {
+            final isSelected = entry.key == mode;
+            return Padding(
+              padding: const EdgeInsets.only(left: 6.0),
+              child: GestureDetector(
+                onTap: () => onSelected(entry.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? shizukuBackground : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : shizukuPrimary,
+                      fontSize: 13,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 }

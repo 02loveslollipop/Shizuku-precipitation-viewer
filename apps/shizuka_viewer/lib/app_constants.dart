@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum VisualizationMode { heatmap, contour }
+enum VisualizationMode { heatmap, realtime, dashboard }
 
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -108,12 +108,11 @@ IntensityClass findIntensityClass(double value) {
 }
 
 Color colorForIntensityClass(IntensityClass cls, VisualizationMode mode) {
-  if (mode == VisualizationMode.contour) {
-    final representative =
-        cls.maxMm == null ? cls.minMm : (cls.minMm + cls.maxMm!) / 2;
-    return _colorForHeatmapValue(representative);
-  }
-  return _colorForHeatmapValue(cls.minMm);
+  // Use a representative value (midpoint) for legend colors so the label
+  // reflects the central value of the intensity class.
+  final representative =
+      cls.maxMm == null ? cls.minMm : (cls.minMm + cls.maxMm!) / 2;
+  return _colorForHeatmapValue(representative);
 }
 
 Color colorForMeasurement(double value, [VisualizationMode? _]) {

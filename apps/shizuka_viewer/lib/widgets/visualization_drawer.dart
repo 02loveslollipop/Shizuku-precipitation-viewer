@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
+import '../localization.dart';
 import 'legend_sheet.dart';
 
 class VisualizationDrawer extends StatelessWidget {
@@ -24,34 +25,47 @@ class VisualizationDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Text(
-                'Visualization',
+                LanguageScope.of(context).t('visualization.title'),
                 style: theme.textTheme.titleMedium,
               ),
             ),
             RadioListTile<VisualizationMode>(
               value: VisualizationMode.heatmap,
               groupValue: mode,
-              title: const Text('Heat plot'),
+              title: Text(LanguageScope.of(context).t('visualization.grid')),
               onChanged: (value) => _onSelect(context, value),
             ),
             RadioListTile<VisualizationMode>(
-              value: VisualizationMode.contour,
+              value: VisualizationMode.realtime,
               groupValue: mode,
-              title: const Text('Contour'),
+              title: Text(
+                LanguageScope.of(context).t('visualization.realtime'),
+              ),
+              onChanged: (value) => _onSelect(context, value),
+            ),
+            RadioListTile<VisualizationMode>(
+              value: VisualizationMode.dashboard,
+              groupValue: mode,
+              title: Text(
+                LanguageScope.of(context).t('visualization.dashboard'),
+              ),
               onChanged: (value) => _onSelect(context, value),
             ),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Precipitation legend'),
-              onTap: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => const LegendSheet(),
-                );
-              },
-            ),
+            if (mode != VisualizationMode.realtime)
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(
+                  LanguageScope.of(context).t('visualization.legend'),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => const LegendSheet(),
+                  );
+                },
+              ),
           ],
         ),
       ),

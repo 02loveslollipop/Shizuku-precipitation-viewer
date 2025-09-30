@@ -11,6 +11,7 @@ import 'api/api_client.dart';
 import 'app_constants.dart';
 import 'app_theme.dart';
 import 'widgets/sensor_detail_sheet.dart';
+import 'widgets/precipitation_panel.dart';
 import 'widgets/shizuku_app_bar.dart';
 import 'localization.dart';
 
@@ -59,6 +60,8 @@ class _HomePageState extends State<HomePage> {
   int _activeTimelineIndex = 0;
   DateTime? _selectedTimestamp;
 
+  VisualizationMode _currentMode = VisualizationMode.heatmap;
+
   Uint8List? _heatmapImage;
   LatLngBounds? _gridBounds;
   List<Polyline> _contourPolylines = [];
@@ -75,14 +78,61 @@ class _HomePageState extends State<HomePage> {
 
   Timer? _debounceTimer;
 
+  // Dashboard state
+  String? _dashboardSelectedSensorId;
+  int _dashboardSeriesIndex = 0;
+  // dashboard sensors are fetched on-demand; no persistent field required
+
   @override
   void initState() {
     super.initState();
     _loadData(initial: true);
-    _refreshTimer = Timer.periodic(
-      const Duration(minutes: 2),
-      (_) => _loadData(silent: true),
-    );
+    // Start refresh timer based on initial mode
+    _updateRefreshTimer();
+  }
+
+  void _onModeChanged() {
+    // When the mode changes, adjust periodic refresh interval and UI defaults
+    if (_currentMode == VisualizationMode.realtime) {
+      // Ensure realtime uses fresh pins and hides grid overlays
+      setState(() {
+        _showPins = true;
+        _showHeatmap = false;
+        _showContours = false;
+      });
+    }
+    if (_currentMode == VisualizationMode.heatmap) {
+      // grid modes: default to showing overlays
+      setState(() {
+        _showPins = true;
+        _showHeatmap = true;
+        _showContours = true;
+      });
+    }
+    // Dashboard specific selections: clear selected sensor to force reload
+    if (_currentMode == VisualizationMode.dashboard) {
+      setState(() {
+        _dashboardSelectedSensorId = null;
+      });
+    }
+
+    _updateRefreshTimer();
+    // Trigger an immediate refresh when switching modes
+    _loadData(silent: false);
+  }
+
+  void _updateRefreshTimer() {
+    _refreshTimer?.cancel();
+    Duration interval;
+    if (_currentMode == VisualizationMode.realtime) {
+      interval = const Duration(minutes: 1);
+    } else if (_currentMode == VisualizationMode.heatmap) {
+      interval = const Duration(minutes: 10);
+    } else {
+      // Dashboard: refresh less frequently
+      interval = const Duration(minutes: 5);
+    }
+    _refreshTimer = Timer.periodic(interval, (_) => _loadData(silent: true));
   }
 
   Future<void> _loadData({bool initial = false, bool silent = false}) async {
@@ -405,6 +455,12 @@ class _HomePageState extends State<HomePage> {
             isMobile
                 ? () => setState(() => _mobileSidebarOpen = !_mobileSidebarOpen)
                 : null,
+        mode: _currentMode,
+        onModeSelected:
+            (m) => setState(() {
+              _currentMode = m;
+              _onModeChanged();
+            }),
       ),
       body:
           _isLoading
@@ -434,12 +490,18 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(18),
-                                  child: _buildMap(),
+                                  child:
+                                      _currentMode ==
+                                              VisualizationMode.dashboard
+                                          ? _buildDashboard()
+                                          : _buildMap(),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            _buildTimelinePanel(theme),
+                            if (_currentMode != VisualizationMode.realtime) ...[
+                              const SizedBox(height: 16),
+                              _buildTimelinePanel(theme),
+                            ],
                           ],
                         ),
                       ),
@@ -499,12 +561,19 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(18),
-                                    child: _buildMap(),
+                                    child:
+                                        _currentMode ==
+                                                VisualizationMode.dashboard
+                                            ? _buildDashboard()
+                                            : _buildMap(),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              _buildTimelinePanel(theme),
+                              if (_currentMode !=
+                                  VisualizationMode.realtime) ...[
+                                const SizedBox(height: 16),
+                                _buildTimelinePanel(theme),
+                              ],
                             ],
                           ),
                         ),
@@ -544,7 +613,10 @@ class _HomePageState extends State<HomePage> {
         maxZoom: 19,
         minZoom: 8, // Increased minimum zoom to keep focus on region
       ),
-      if (_showHeatmap && _heatmapImage != null && _gridBounds != null)
+      if (_currentMode != VisualizationMode.realtime &&
+          _showHeatmap &&
+          _heatmapImage != null &&
+          _gridBounds != null)
         OverlayImageLayer(
           overlayImages: [
             OverlayImage(
@@ -554,10 +626,15 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-      if (_showContours && _contourFills.isNotEmpty)
+      if (_currentMode != VisualizationMode.realtime &&
+          _showContours &&
+          _contourFills.isNotEmpty)
         PolygonLayer(polygons: _contourFills),
-      if (_showContours && _contourPolylines.isNotEmpty)
+      if (_currentMode != VisualizationMode.realtime &&
+          _showContours &&
+          _contourPolylines.isNotEmpty)
         PolylineLayer(polylines: _contourPolylines),
+      // Pins are always shown when enabled; in realtime mode they reflect /now
       if (_showPins) MarkerLayer(markers: _buildMarkers()),
     ];
 
@@ -646,6 +723,169 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildDashboard() {
+    // Dashboard view: averages + preview + sensor selector + sensor series plot
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _apiClient.fetchDashboardSummary(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snap.hasData || snap.data == null) {
+          return const Center(child: Text('No dashboard data'));
+        }
+        final data = snap.data!;
+        final avg = data['averages'] as Map<String, dynamic>? ?? {};
+        final preview = data['grid_preview_jpeg_url'] as String?;
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Dashboard',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                children:
+                    ['3h', '6h', '12h', '24h'].map((k) {
+                      final v = avg[k];
+                      final display =
+                          v == null
+                              ? '--'
+                              : (v as num).toDouble().toStringAsFixed(2);
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                k,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('$display mm'),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
+              const SizedBox(height: 18),
+              if (preview != null)
+                Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Image.network(preview, fit: BoxFit.cover),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text('ETL preview image'),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 18),
+              const Divider(),
+              const SizedBox(height: 8),
+              Text(
+                'Sensor series',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+
+              // Sensor selector + series
+              FutureBuilder<List<SensorMeasurement>>(
+                future: _apiClient.fetchLatestMeasurements(),
+                builder: (ctx, sensorsSnap) {
+                  if (sensorsSnap.connectionState == ConnectionState.waiting) {
+                    return _dashboardPlaceholder();
+                  }
+                  if (!sensorsSnap.hasData) return _dashboardPlaceholder();
+                  final sensors = sensorsSnap.data!;
+                  final items = sensors
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s.sensorId,
+                          child: Text(s.name ?? s.sensorId),
+                        ),
+                      )
+                      .toList(growable: false);
+
+                  final selectedId =
+                      _dashboardSelectedSensorId ??
+                      (sensors.isNotEmpty ? sensors.first.sensorId : null);
+                  // Ensure default selection is reflected in state
+                  if (_dashboardSelectedSensorId == null &&
+                      selectedId != null) {
+                    // avoid calling setState during build synchronously; schedule microtask
+                    Future.microtask(() {
+                      if (mounted)
+                        setState(() => _dashboardSelectedSensorId = selectedId);
+                    });
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DropdownButton<String>(
+                        value: _dashboardSelectedSensorId ?? selectedId,
+                        items: items,
+                        onChanged: (val) {
+                          setState(() {
+                            _dashboardSelectedSensorId = val;
+                            _dashboardSeriesIndex = 0;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // Inline series chart for the selected sensor
+                      if (selectedId != null)
+                        FutureBuilder<List<SeriesPoint>>(
+                          future: _apiClient.fetchSensorHistory(selectedId),
+                          builder: (ctx2, seriesSnap) {
+                            if (seriesSnap.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24.0),
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+                            final series = seriesSnap.data ?? [];
+                            return SizedBox(
+                              height: 260,
+                              child: PrecipitationPanel(
+                                series: series,
+                                selectedIndex: _dashboardSeriesIndex,
+                                onIndexChanged:
+                                    (i) => setState(
+                                      () => _dashboardSeriesIndex = i,
+                                    ),
+                              ),
+                            );
+                          },
+                        )
+                      else
+                        const Text('No sensors available'),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   List<Marker> _buildMarkers() {
     return _measurements
         .map<Marker>(
@@ -730,61 +970,95 @@ class _HomePageState extends State<HomePage> {
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: 12),
-              _buildToggle(
-                label: LanguageScope.of(context).t('overlay.pins'),
-                value: _showPins,
-                onChanged: (value) => setState(() => _showPins = value),
-              ),
-              _buildToggle(
-                label: LanguageScope.of(context).t('overlay.heatmap'),
-                value: _showHeatmap,
-                onChanged: (value) => setState(() => _showHeatmap = value),
-              ),
-              _buildToggle(
-                label: LanguageScope.of(context).t('toggle.contours'),
-                value: _showContours,
-                onChanged: (value) => setState(() => _showContours = value),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLegendCard(theme),
-                      const SizedBox(height: 24),
-                      Text(
-                        LanguageScope.of(context).t('sidebar.pinSeverity'),
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      _PinLegendRow(
-                        color: colorForPinMeasurement(
-                          pinGreenThresholdMm - 0.009,
+              // If realtime mode: only show pins toggle and pin severity
+              if (_currentMode == VisualizationMode.realtime) ...[
+                _buildToggle(
+                  label: LanguageScope.of(context).t('overlay.pins'),
+                  value: _showPins,
+                  onChanged: (value) => setState(() => _showPins = value),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  LanguageScope.of(context).t('sidebar.pinSeverity'),
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                _PinLegendRow(
+                  color: colorForPinMeasurement(pinGreenThresholdMm - 0.009),
+                  label: LanguageScope.of(context).t('pin.low'),
+                  range: '0 – ${pinGreenThresholdMm.toStringAsFixed(0)} mm',
+                ),
+                _PinLegendRow(
+                  color: colorForPinMeasurement(
+                    (pinGreenThresholdMm + pinAmberThresholdMm) / 2,
+                  ),
+                  label: LanguageScope.of(context).t('pin.moderate'),
+                  range:
+                      '${pinGreenThresholdMm.toStringAsFixed(0)} – ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
+                ),
+                _PinLegendRow(
+                  color: colorForPinMeasurement(pinAmberThresholdMm + 0.009),
+                  label: LanguageScope.of(context).t('pin.high'),
+                  range: '> ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
+                ),
+              ] else ...[
+                _buildToggle(
+                  label: LanguageScope.of(context).t('overlay.pins'),
+                  value: _showPins,
+                  onChanged: (value) => setState(() => _showPins = value),
+                ),
+                _buildToggle(
+                  label: LanguageScope.of(context).t('overlay.heatmap'),
+                  value: _showHeatmap,
+                  onChanged: (value) => setState(() => _showHeatmap = value),
+                ),
+                _buildToggle(
+                  label: LanguageScope.of(context).t('toggle.contours'),
+                  value: _showContours,
+                  onChanged: (value) => setState(() => _showContours = value),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLegendCard(theme),
+                        const SizedBox(height: 24),
+                        Text(
+                          LanguageScope.of(context).t('sidebar.pinSeverity'),
+                          style: theme.textTheme.bodyMedium,
                         ),
-                        label: LanguageScope.of(context).t('pin.low'),
-                        range:
-                            '0 – ${pinGreenThresholdMm.toStringAsFixed(0)} mm',
-                      ),
-                      _PinLegendRow(
-                        color: colorForPinMeasurement(
-                          (pinGreenThresholdMm + pinAmberThresholdMm) / 2,
+                        const SizedBox(height: 8),
+                        _PinLegendRow(
+                          color: colorForPinMeasurement(
+                            pinGreenThresholdMm - 0.009,
+                          ),
+                          label: LanguageScope.of(context).t('pin.low'),
+                          range:
+                              '0 – ${pinGreenThresholdMm.toStringAsFixed(0)} mm',
                         ),
-                        label: LanguageScope.of(context).t('pin.moderate'),
-                        range:
-                            '${pinGreenThresholdMm.toStringAsFixed(0)} – ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
-                      ),
-                      _PinLegendRow(
-                        color: colorForPinMeasurement(
-                          pinAmberThresholdMm + 0.009,
+                        _PinLegendRow(
+                          color: colorForPinMeasurement(
+                            (pinGreenThresholdMm + pinAmberThresholdMm) / 2,
+                          ),
+                          label: LanguageScope.of(context).t('pin.moderate'),
+                          range:
+                              '${pinGreenThresholdMm.toStringAsFixed(0)} – ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
                         ),
-                        label: LanguageScope.of(context).t('pin.high'),
-                        range: '> ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
-                      ),
-                    ],
+                        _PinLegendRow(
+                          color: colorForPinMeasurement(
+                            pinAmberThresholdMm + 0.009,
+                          ),
+                          label: LanguageScope.of(context).t('pin.high'),
+                          range:
+                              '> ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
               Text(
                 LanguageScope.of(context).t('refresh.info'),
@@ -796,6 +1070,45 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _dashboardPlaceholder() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Disabled dropdown mimic
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(height: 16, color: Colors.grey.shade200),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.arrow_drop_down, color: Colors.grey),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Chart skeleton
+        SizedBox(
+          height: 260,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ],
     );
   }
 
@@ -861,7 +1174,7 @@ class _HomePageState extends State<HomePage> {
                     decoration: BoxDecoration(
                       color: colorForIntensityClass(
                         cls,
-                        VisualizationMode.contour,
+                        VisualizationMode.heatmap,
                       ),
                       shape: BoxShape.circle,
                     ),
@@ -1161,7 +1474,7 @@ class _HomePageState extends State<HomePage> {
       final intensity = findIntensityClass(feature.thresholdMm);
       final strokeColor = colorForIntensityClass(
         intensity,
-        VisualizationMode.contour,
+        VisualizationMode.heatmap,
       ).withOpacity(0.9);
       final points =
           feature.coordinates.map((pair) => LatLng(pair[1], pair[0])).toList();

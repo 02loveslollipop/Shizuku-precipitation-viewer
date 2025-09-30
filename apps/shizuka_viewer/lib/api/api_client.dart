@@ -404,6 +404,23 @@ class ApiClient {
     }
   }
 
+  /// Fetch dashboard summary which contains averages for 3/6/12/24h and an
+  /// optional grid preview JPEG URL produced by the ETL. Returns the decoded
+  /// JSON as a non-null Map<String, dynamic>. On failure an empty map is
+  /// returned so callers do not need to handle a nullable future result.
+  Future<Map<String, dynamic>> fetchDashboardSummary() async {
+    try {
+      final resp = await _client.get(
+        Uri.parse('$apiBaseUrl/dashboard/summary'),
+      );
+      if (resp.statusCode != 200) return <String, dynamic>{};
+      final jsonBody = jsonDecode(resp.body) as Map<String, dynamic>;
+      return jsonBody;
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
   Future<GridSnapshot?> fetchGridByUrl(
     String gridUrl, {
     String? contoursUrl,
