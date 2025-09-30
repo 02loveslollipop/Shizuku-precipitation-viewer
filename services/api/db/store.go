@@ -209,10 +209,10 @@ type GridInfo struct {
 }
 
 const availableGridsSQL = `
-    SELECT timestamp
-    FROM grids
+    SELECT ts
+    FROM grid_runs
     WHERE status = 'done'
-    ORDER BY timestamp DESC
+    ORDER BY ts DESC
 `
 
 // GetAvailableGridTimestamps returns timestamps of all completed grids.
@@ -235,9 +235,9 @@ func (s *Store) GetAvailableGridTimestamps(ctx context.Context) ([]time.Time, er
 }
 
 const gridByTimestampSQL = `
-    SELECT id, timestamp, resolution, bounds, srid, grid_url, grid_npz_url, contours_url, status, error_msg, created_at, updated_at
-    FROM grids
-    WHERE timestamp = $1 AND status = 'done'
+    SELECT id, ts, res_m, bbox, crs, blob_url_json, blob_url_npz, blob_url_contours, status, message, created_at, updated_at
+    FROM grid_runs
+    WHERE ts = $1 AND status = 'done'
     LIMIT 1
 `
 
@@ -249,17 +249,17 @@ func (s *Store) GetGridByTimestamp(ctx context.Context, timestamp time.Time) (*G
 	var boundsJSON []byte
 	if err := row.Scan(
 		&g.ID,
-		&g.Timestamp,
-		&g.Resolution,
-		&boundsJSON,
-		&g.SRID,
-		&g.GridURL,
-		&g.GridNPZURL,
-		&g.ContoursURL,
-		&g.Status,
-		&g.ErrorMsg,
-		&g.CreatedAt,
-		&g.UpdatedAt,
+		&g.Timestamp,   // ts
+		&g.Resolution,  // res_m
+		&boundsJSON,    // bbox
+		&g.SRID,        // crs
+		&g.GridURL,     // blob_url_json
+		&g.GridNPZURL,  // blob_url_npz
+		&g.ContoursURL, // blob_url_contours
+		&g.Status,      // status
+		&g.ErrorMsg,    // message
+		&g.CreatedAt,   // created_at
+		&g.UpdatedAt,   // updated_at
 	); err != nil {
 		return nil, err
 	}
