@@ -29,60 +29,134 @@ Shizuku uses a microservices architecture for scalability and real-time processi
 ## 🚀 Running Instructions
 
 ### Prerequisites
+### Prerequisites
 
-- Go 1.23+
-- Python 3.11+
-- PostgreSQL 15+ (with PostGIS and TimescaleDB)
-- Flutter SDK 3.7+
+- **Go 1.23+**: Required for API services and watcher components
+- **Python 3.11+**: Needed for data processing and analysis services
+- **PostgreSQL 15+**: Database with PostGIS and TimescaleDB extensions
+- **Flutter SDK 3.7+**: Cross-platform application development
 
-### Environment (example)
+### Environment Configuration
 
-Create a `.env` file in the project root with values like:
+Create a `.env` file in the project root:
 
-```
+```bash
+# Database Configuration
 DATABASE_URL=postgres://username:password@host:port/database?sslmode=require
+
+# External Service Integration  
 VERCEL_BLOB_BASE_URL=https://your-blob-storage.vercel-storage.com
+VERCEL_BLOB_RW_TOKEN=vercel_blob_rw_token_here
+
+# SIATA Data Sources
 CURRENT_URL=https://siata.gov.co/data/siata_app/Pluviometrica.json
+HISTORIC_URL=https://datosabiertos.metropol.gov.co/sites/default/files/uploaded_resources/Datos_SIATA_Vaisala_precipitacion_0.json
+
+# API Service Configuration
 API_PORT=8080
+API_BEARER_TOKEN=optional_authentication_token
+CORS_ALLOWED_ORIGINS=*
+
+# Processing Parameters
+GRID_RES_M=500
+BBOX_PADDING_M=5000
+CLEANER_LOOKBACK_HOURS=72
+WATCHER_MIN_INTERVAL=5m
 ```
 
-### Local development quick start
+### Database Setup
 
-Backend services
-
-1. API service
-
+1. **Create PostgreSQL Database**:
+```bash
+createdb shizuku_precipitation
 ```
+
+2. **Install Extensions**:
+```sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+```
+
+3. **Apply Schema**:
+```bash
+psql $DATABASE_URL -f db/schema.sql
+```
+
+### Local Development
+
+#### **Backend Services**
+
+**Start API Service**:
+```bash
 cd services/api
 go mod download
 go run main.go
 ```
 
-2. Watcher service
-
-```
+**Run Data Watcher**:
+```bash
 cd services/watcher
 go run main.go
 ```
 
-3. Cleaner / ETL
-
-```
+**Execute Data Cleaner**:
+```bash
 pip install -r requirements.txt
 python -m services.cleaner.main
+```
+
+**Process Grid Generation**:
+```bash
 python -m services.etl.main
 ```
 
-Flutter app
+#### **Frontend Application**
 
-```
+**Flutter Development**:
+```bash
 cd apps/shizuka_viewer
 flutter pub get
-flutter run -d chrome
+flutter run -d chrome  # or your preferred target
+```
+
+### Production Deployment
+
+#### **Heroku Configuration**
+
+1. **Create Heroku Applications**:
+```bash
+heroku create shizuku-api --buildpack heroku/go
+heroku create shizuku-watcher --buildpack heroku/go  
+heroku create shizuku-processor --buildpack heroku/python
+```
+
+2. **Configure Environment Variables**:
+```bash
+heroku config:set DATABASE_URL=$DATABASE_URL --app shizuku-api
+heroku config:set VERCEL_BLOB_BASE_URL=$VERCEL_BLOB_BASE_URL --app shizuku-api
+# Repeat for all applications with relevant variables
+```
+
+3. **Deploy Services**:
+```bash
+git subtree push --prefix=services/api heroku-api main
+git subtree push --prefix=services/watcher heroku-watcher main
+```
+
+4. **Schedule Background Jobs**:
+- Configure Heroku Scheduler for watcher service: `bin/watcher` (every 10 minutes)
+- Configure Heroku Scheduler for cleaner service: `python -m services.cleaner.main` (hourly)
+- Configure Heroku Scheduler for ETL service: `python -m services.etl.main` (hourly)
+
+#### **Flutter Web Deployment**
+
+```bash
+cd apps/shizuka_viewer
+flutter build web --release
+# Deploy build/web directory to your preferred hosting platform
 ```
 
 ---
-
 ## 📚 Database schema & data flow (short)
 
 - Core tables: `sensors`, `raw_measurements`, `clean_measurements`, `grid_runs`.
