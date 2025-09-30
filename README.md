@@ -2,11 +2,6 @@
 	<img src="apps/shizuka_viewer/assets/icons/shizuku_logo.svg" alt="Shizuku Logo" width="120"/>
 	<h1>Shizuku</h1>
 	<p>
-		<a href="https://github.com/02loveslollipop/Shizuku-precipitation-viewer/actions">
-				<img src="https://github.com/02loveslollipop/Shizuku-precipitation-viewer/actions/workflows/ci.yaml/badge.svg" alt="CI Status">
-				<img src="https://sonarcloud.io/api/project_badges/measure?project=02loveslollipop_Shizuku-precipitation-viewer&metric=alert_status" alt="SonarCloud Quality Gate Status">
-				<img src="https://sonarcloud.io/api/project_badges/measure?project=02loveslollipop_Shizuku-precipitation-viewer&metric=ncloc" alt="SonarCloud Lines of Code">
-		</a>
 	</p>
 	<p><em>Real-time precipitation visualization for the Medellín metropolitan area with interactive maps and sensor analytics.</em></p>
 </div>
