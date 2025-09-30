@@ -77,6 +77,8 @@ func (s *Server) registerRoutes() {
 	s.engine.GET("/sensor/:sensor_id", s.handleGetSensor)
 	s.engine.GET("/now", s.handleLatest)
 	s.engine.GET("/grid/latest", s.handleGridLatest)
+	s.engine.GET("/grid/available", s.handleGridAvailable)
+	s.engine.GET("/grid/:timestamp", s.handleGridByTimestamp)
 }
 
 func bearerAuthMiddleware(expected string) gin.HandlerFunc {
@@ -247,4 +249,72 @@ func (s *Server) handleLatest(c *gin.Context) {
 func (s *Server) handleGridLatest(c *gin.Context) {
 	gridURL := strings.TrimRight(s.cfg.BlobBaseURL, "/") + "/" + strings.TrimLeft(s.cfg.GridLatestPath, "/")
 	c.JSON(http.StatusOK, gin.H{"grid_url": gridURL})
+}
+
+func (s *Server) handleGridAvailable(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	timestamps, err := s.store.GetAvailableGridTimestamps(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert timestamps to RFC3339 strings for JSON response
+	timestampStrings := make([]string, len(timestamps))
+	for i, ts := range timestamps {
+		timestampStrings[i] = ts.Format(time.RFC3339)
+	}
+
+	response := gin.H{
+		"timestamps": timestampStrings,
+	}
+	
+	// Add latest timestamp if available
+	if len(timestamps) > 0 {
+		response["latest"] = timestamps[0].Format(time.RFC3339) // First element is latest due to DESC order
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) handleGridByTimestamp(c *gin.Context) {
+	timestampStr := c.Param("timestamp")
+	if timestampStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "timestamp parameter is required"})
+		return
+	}
+
+	timestamp, err := time.Parse(time.RFC3339, timestampStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamp format, expected RFC3339"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	gridInfo, err := s.store.GetGridByTimestamp(ctx, timestamp)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "grid not found for timestamp"})
+		return
+	}
+
+	response := gin.H{
+		"timestamp": gridInfo.Timestamp.Format(time.RFC3339),
+		"status":    gridInfo.Status,
+	}
+
+	if gridInfo.GridURL != nil {
+		response["grid_url"] = *gridInfo.GridURL
+	}
+	if gridInfo.ContoursURL != nil {
+		response["contours_url"] = *gridInfo.ContoursURL
+	}
+	if len(gridInfo.Bounds) > 0 {
+		response["bounds"] = gridInfo.Bounds
+	}
+
+	c.JSON(http.StatusOK, response)
 }
