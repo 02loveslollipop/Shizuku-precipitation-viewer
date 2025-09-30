@@ -12,19 +12,25 @@ import 'app_constants.dart';
 import 'app_theme.dart';
 import 'widgets/sensor_detail_sheet.dart';
 import 'widgets/shizuku_app_bar.dart';
+import 'localization.dart';
 
 void main() {
   Intl.defaultLocale = 'en_US';
-  runApp(const ShizukuViewerApp());
+  final lang = LanguageProvider();
+  runApp(
+    LanguageScope(notifier: lang, child: ShizukuViewerApp(language: lang)),
+  );
 }
 
 class ShizukuViewerApp extends StatelessWidget {
-  const ShizukuViewerApp({super.key});
+  const ShizukuViewerApp({super.key, required this.language});
+
+  final LanguageProvider language;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Shizuku Viewer',
+      title: language.t('app.title'),
       theme: buildShizukuTheme(),
       home: const HomePage(),
     );
@@ -49,7 +55,6 @@ class _HomePageState extends State<HomePage> {
   List<SensorMeasurement> _measurements = [];
   final Map<DateTime, GridSnapshot> _gridSnapshots = {};
   final Map<DateTime, _GridOverlayAssets> _gridOverlays = {};
-  final Map<DateTime, GridSource> _gridSources = {};
   List<DateTime> _timeline = [];
   int _activeTimelineIndex = 0;
   DateTime? _selectedTimestamp;
@@ -65,6 +70,8 @@ class _HomePageState extends State<HomePage> {
 
   Timer? _refreshTimer;
   bool _refreshInFlight = false;
+
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -118,12 +125,26 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (availability != null && availability.timestamps.isNotEmpty) {
-        // Set up timeline
-        _timeline = availability.timestamps;
+        // Preserve existing cached data when updating timeline
+        final newTimeline = availability.timestamps;
 
-        // Load latest grid data
+        // Only update timeline if it's different to preserve state
+        if (_timeline.isEmpty || !_listsEqual(_timeline, newTimeline)) {
+          _timeline = newTimeline;
+        }
+
+        // Load latest grid data and set as active
         final latestTimestamp =
-            availability.latest ?? availability.timestamps.first;
+            availability.latest ?? availability.timestamps.last;
+
+        setState(() {
+          // If availability.latest corresponds to an index in the timeline,
+          // use that index. Otherwise fall back to the final index.
+          final idx = _timeline.indexOf(latestTimestamp);
+          _activeTimelineIndex = idx >= 0 ? idx : (_timeline.length - 1);
+          _selectedTimestamp = latestTimestamp;
+        });
+
         await _loadGridForTimestamp(latestTimestamp, isInitial: true);
       } else {
         setState(() {
@@ -133,8 +154,14 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       if (!mounted) return;
+      // Don't show abort errors as user-facing errors
+      final errorMessage =
+          e.toString().contains('aborted') ||
+                  e.toString().contains('AbortError')
+              ? null
+              : 'Failed to load data. $e';
       setState(() {
-        _errorMessage = 'Failed to load data. $e';
+        _errorMessage = errorMessage;
         _isLoading = false;
         _isGridLoading = false;
       });
@@ -143,106 +170,21 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadDataLegacy() async {
     try {
-      final measurementsFuture = _apiClient.fetchLatestMeasurements();
-      final gridFuture = _apiClient.fetchLatestGridBundle();
-
-      final sensors = await measurementsFuture;
-      final bundle = await gridFuture;
-
-      _GridOverlayAssets? latestOverlay;
-      if (bundle != null) {
-        latestOverlay = await _buildGridOverlay(bundle.snapshot);
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _measurements = sensors;
-        _errorMessage = null;
-        _isLoading = false;
-      });
-
-      if (bundle != null && latestOverlay != null) {
-        _ingestGridBundle(bundle, latestOverlay);
-      } else {
-        setState(() {
-          _isGridLoading = false;
-        });
-      }
+      // Use progressive loading for refreshes too to preserve state
+      await _loadDataProgressive();
     } catch (e) {
       if (!mounted) return;
+      // Don't show abort errors as user-facing errors
+      final errorMessage =
+          e.toString().contains('aborted') ||
+                  e.toString().contains('AbortError')
+              ? null
+              : 'Failed to load data. $e';
       setState(() {
-        _errorMessage = 'Failed to load data. $e';
+        _errorMessage = errorMessage;
         _isLoading = false;
         _isGridLoading = false;
       });
-    }
-  }
-
-  void _ingestGridBundle(
-    GridLatestBundle bundle,
-    _GridOverlayAssets latestOverlay,
-  ) {
-    final previousSelection = _selectedTimestamp;
-    final wasAtLatest =
-        previousSelection == null ||
-        (_timeline.isNotEmpty && previousSelection == _timeline.last);
-
-    _gridSnapshots[bundle.snapshot.timestamp] = bundle.snapshot;
-    _gridOverlays[bundle.snapshot.timestamp] = latestOverlay;
-    _gridSources[bundle.snapshot.timestamp] = bundle.source;
-
-    for (final entry in bundle.history) {
-      _gridSources.putIfAbsent(entry.timestamp, () => entry.source);
-    }
-
-    final sorted = _gridSources.keys.toList()..sort();
-
-    setState(() {
-      _timeline = sorted;
-    });
-
-    if (_timeline.isEmpty) {
-      setState(() {
-        _heatmapImage = null;
-        _gridBounds = null;
-        _contourPolylines = [];
-        _contourFills = [];
-        _isGridLoading = false;
-      });
-      return;
-    }
-
-    if (wasAtLatest || !_timeline.contains(previousSelection)) {
-      final latestTimestamp = _timeline.last;
-      final resolvedOverlay = _gridOverlays[latestTimestamp] ?? latestOverlay;
-      final resolvedSnapshot =
-          _gridSnapshots[latestTimestamp] ?? bundle.snapshot;
-      setState(() {
-        _activeTimelineIndex = _timeline.length - 1;
-        _selectedTimestamp = latestTimestamp;
-        _updateActiveOverlay(resolvedSnapshot, resolvedOverlay);
-        _isGridLoading = false;
-      });
-      return;
-    }
-
-    final index = _timeline.indexOf(previousSelection);
-    setState(() {
-      _activeTimelineIndex = index;
-      _selectedTimestamp = previousSelection;
-      final cachedOverlay = _gridOverlays[previousSelection];
-      final cachedSnapshot = _gridSnapshots[previousSelection];
-      if (cachedOverlay != null && cachedSnapshot != null) {
-        _updateActiveOverlay(cachedSnapshot, cachedOverlay);
-        _isGridLoading = false;
-      } else {
-        _isGridLoading = true;
-      }
-    });
-
-    if (!_gridOverlays.containsKey(previousSelection)) {
-      _ensureGridLoaded(previousSelection);
     }
   }
 
@@ -250,6 +192,7 @@ class _HomePageState extends State<HomePage> {
     final cachedOverlay = _gridOverlays[timestamp];
     final cachedSnapshot = _gridSnapshots[timestamp];
     if (cachedOverlay != null && cachedSnapshot != null) {
+      print('Using cached grid data for timestamp: ${timestamp}');
       if (!mounted) return;
       setState(() {
         if (_selectedTimestamp == timestamp) {
@@ -260,122 +203,233 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final source = _gridSources[timestamp];
-    if (source == null) {
+    try {
+      // Fetch grid metadata from API using the new progressive endpoint
+      final gridData = await _apiClient.fetchGridData(timestamp);
+      if (gridData == null || gridData.gridUrl == null) {
+        if (!mounted) return;
+        setState(() {
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Fetch the actual grid content from blob storage
+      final snapshot = await _apiClient.fetchGridByUrl(
+        gridData.gridUrl!,
+        contoursUrl: gridData.contoursUrl,
+      );
+      if (!mounted) return;
+      if (snapshot == null) {
+        setState(() {
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Build overlay assets
+      final overlay = await _buildGridOverlay(snapshot);
+      if (!mounted) return;
+      if (overlay == null) {
+        setState(() {
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Cache and update UI
+      setState(() {
+        _gridSnapshots[timestamp] = snapshot;
+        _gridOverlays[timestamp] = overlay;
+        print('Cached grid data for timestamp: ${timestamp}');
+        if (_selectedTimestamp == timestamp) {
+          _updateActiveOverlay(snapshot, overlay);
+          _isGridLoading = false;
+        }
+      });
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _isGridLoading = false;
       });
-      return;
-    }
-
-    final snapshot = await _apiClient.fetchGridByUrl(
-      source.gridUrl,
-      contoursUrl: source.contoursUrl,
-    );
-    if (!mounted) return;
-    if (snapshot == null) {
-      setState(() {
-        _isGridLoading = false;
-      });
-      return;
-    }
-
-    final overlay = await _buildGridOverlay(snapshot);
-    if (!mounted) return;
-    if (overlay == null) {
-      setState(() {
-        _isGridLoading = false;
-      });
-      return;
-    }
-
-    setState(() {
-      _gridSnapshots[timestamp] = snapshot;
-      _gridOverlays[timestamp] = overlay;
-      if (_selectedTimestamp == timestamp) {
-        _updateActiveOverlay(snapshot, overlay);
-        _isGridLoading = false;
+      // Don't log abort errors as they're expected when requests are cancelled
+      if (!e.toString().contains('aborted') &&
+          !e.toString().contains('AbortError')) {
+        print('Error loading grid for timestamp $timestamp: $e');
       }
-    });
+    }
   }
 
   void _updateActiveOverlay(GridSnapshot snapshot, _GridOverlayAssets overlay) {
+    print(
+      'Applying grid overlay for timestamp: ${snapshot.timestamp} (${overlay.contours.length} contours, ${overlay.filledContours.length} filled contours)',
+    );
     _heatmapImage = overlay.heatmapPng;
     _gridBounds = overlay.bounds;
     _contourPolylines = overlay.contours;
     _contourFills = overlay.filledContours;
+    // Update sensor measurements from the applied grid so pins reflect
+    // the gridded values at the sensors' locations.
+    _updateSensorsFromGrid(snapshot);
+  }
+
+  void _updateSensorsFromGrid(GridSnapshot snapshot) {
+    // quick bounds and sizes
+    final rows = snapshot.data.length;
+    if (rows == 0) return;
+    final cols = snapshot.data.first.length;
+    if (cols == 0) return;
+
+    // bbox values are available on snapshot if needed by sampling helper
+
+    List<SensorMeasurement> updated = _measurements
+        .map((m) {
+          final sample = _sampleGridValueAtLatLng(snapshot, m.lat, m.lon);
+          if (sample == null || sample.isNaN) {
+            return m; // leave unchanged
+          }
+          return SensorMeasurement(
+            sensorId: m.sensorId,
+            name: m.name,
+            city: m.city,
+            lat: m.lat,
+            lon: m.lon,
+            valueMm: sample,
+            timestamp: snapshot.timestamp,
+          );
+        })
+        .toList(growable: false);
+
+    setState(() {
+      _measurements = updated;
+    });
+    print('Updated ${updated.length} sensors from grid ${snapshot.timestamp}');
+  }
+
+  double? _sampleGridValueAtLatLng(
+    GridSnapshot snapshot,
+    double lat,
+    double lon,
+  ) {
+    final rows = snapshot.data.length;
+    if (rows == 0) return null;
+    final cols = snapshot.data.first.length;
+    if (cols == 0) return null;
+
+    // Map lat/lon to grid indices. Assume bbox: [west, south, east, north]
+    final west = snapshot.west;
+    final south = snapshot.south;
+    final east = snapshot.east;
+    final north = snapshot.north;
+
+    if (lon < west || lon > east || lat < south || lat > north)
+      return double.nan;
+
+    final xFrac = (lon - west) / (east - west);
+    final yFrac = (lat - south) / (north - south);
+
+    final x = (xFrac * (cols - 1)).round().clamp(0, cols - 1);
+    // grid rows are ordered north-to-south in snapshot.data? The code that
+    // builds the image flipped rows; here assume data is [row0..rowN] from
+    // north->south. If this is inverted, sampling will need to flip y.
+    final y = ((1 - yFrac) * (rows - 1)).round().clamp(0, rows - 1);
+
+    final value = snapshot.data[y][x];
+    // Values cannot be negative: clamp negatives to 0. Keep NaN/Infinity as-is.
+    if (value.isNaN) return value;
+    if (value.isFinite) {
+      return value < 0.0 ? 0.0 : value;
+    }
+    return value;
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _debounceTimer?.cancel();
     _apiClient.dispose();
     super.dispose();
+  }
+
+  bool _listsEqual(List<DateTime> a, List<DateTime> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = LanguageScope.of(context);
     return Scaffold(
-      appBar: const ShizukuAppBar(subtitle: 'Map viewer'),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-          ? _buildError(theme)
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildSidebar(theme),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.06),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: _buildMap(),
+      appBar: ShizukuAppBar(subtitle: t.t('app.subtitle.mapViewer')),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? _buildError(theme)
+              : Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildSidebar(theme),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: _buildMap(),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTimelinePanel(theme),
-                      ],
+                          const SizedBox(height: 16),
+                          _buildTimelinePanel(theme),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _loadData(),
         icon: const Icon(Icons.refresh),
-        label: const Text('Refresh'),
+        label: Text(LanguageScope.of(context).t('action.refresh')),
       ),
     );
   }
 
   Widget _buildMap() {
-    final center = _measurements.isNotEmpty
-        ? LatLng(
-            _measurements.map((m) => m.lat).reduce((a, b) => a + b) /
-                _measurements.length,
-            _measurements.map((m) => m.lon).reduce((a, b) => a + b) /
-                _measurements.length,
-          )
-        : const LatLng(6.2442, -75.5812);
+    final center =
+        _measurements.isNotEmpty
+            ? LatLng(
+              _measurements.map((m) => m.lat).reduce((a, b) => a + b) /
+                  _measurements.length,
+              _measurements.map((m) => m.lon).reduce((a, b) => a + b) /
+                  _measurements.length,
+            )
+            : const LatLng(6.2442, -75.5812);
+
+    // Define bounds for Antioquia region to limit zoom out
+    const antioaquiaSouth = 4.8;
+    const antioaquiaNorth = 8.8;
+    const antioaquiaWest = -77.2;
+    const antioaquiaEast = -73.5;
 
     final layers = <Widget>[
       TileLayer(
@@ -383,7 +437,7 @@ class _HomePageState extends State<HomePage> {
             'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
         userAgentPackageName: 'com.shizuku.viewer',
         maxZoom: 19,
-        minZoom: 2,
+        minZoom: 8, // Increased minimum zoom to keep focus on region
       ),
       if (_showHeatmap && _heatmapImage != null && _gridBounds != null)
         OverlayImageLayer(
@@ -409,6 +463,28 @@ class _HomePageState extends State<HomePage> {
           options: MapOptions(
             initialCenter: center,
             initialZoom: 11,
+            minZoom: 8.0, // Prevent zooming out too far
+            maxZoom: 19.0,
+            onPositionChanged: (position, hasGesture) {
+              // Enforce bounds for Antioquia region
+              if (hasGesture) {
+                // Check if center is outside bounds and adjust if needed
+                final center = position.center;
+                double newLat = center.latitude;
+                double newLng = center.longitude;
+
+                if (center.latitude < antioaquiaSouth) newLat = antioaquiaSouth;
+                if (center.latitude > antioaquiaNorth) newLat = antioaquiaNorth;
+                if (center.longitude < antioaquiaWest) newLng = antioaquiaWest;
+                if (center.longitude > antioaquiaEast) newLng = antioaquiaEast;
+
+                if (newLat != center.latitude || newLng != center.longitude) {
+                  Future.microtask(() {
+                    _mapController.move(LatLng(newLat, newLng), position.zoom);
+                  });
+                }
+              }
+            },
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
@@ -416,9 +492,26 @@ class _HomePageState extends State<HomePage> {
           children: layers,
         ),
         if (_isGridLoading)
-          const Positioned.fill(
+          Positioned.fill(
             child: IgnorePointer(
-              child: Center(child: CircularProgressIndicator()),
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading data...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         if (_selectedTimestamp != null)
@@ -456,10 +549,11 @@ class _HomePageState extends State<HomePage> {
             width: 42,
             height: 42,
             child: Builder(
-              builder: (context) => _SensorMarker(
-                measurement: measurement,
-                onTap: () => _showSensorDetails(measurement),
-              ),
+              builder:
+                  (context) => _SensorMarker(
+                    measurement: measurement,
+                    onTap: () => _showSensorDetails(measurement),
+                  ),
             ),
           ),
         )
@@ -467,14 +561,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showSensorDetails(SensorMeasurement measurement) async {
-    final history = await _apiClient.fetchSensorHistory(measurement.sensorId);
-    if (!mounted) return;
+    try {
+      final history = await _apiClient.fetchSensorHistory(measurement.sensorId);
+      if (!mounted) return;
 
-    showModalBottomSheet(
-      context: context,
-      builder: (context) =>
-          SensorDetailSheet(measurement: measurement, history: history),
-    );
+      showModalBottomSheet(
+        context: context,
+        builder:
+            (context) =>
+                SensorDetailSheet(measurement: measurement, history: history),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      // Don't show abort errors as user-facing errors
+      if (!e.toString().contains('aborted') &&
+          !e.toString().contains('AbortError')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load sensor history: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildError(ThemeData theme) {
@@ -514,20 +620,23 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Overlays', style: theme.textTheme.titleMedium),
+              Text(
+                LanguageScope.of(context).t('overlays.title'),
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               _buildToggle(
-                label: 'Pins',
+                label: LanguageScope.of(context).t('overlay.pins'),
                 value: _showPins,
                 onChanged: (value) => setState(() => _showPins = value),
               ),
               _buildToggle(
-                label: 'Heat map',
+                label: LanguageScope.of(context).t('overlay.heatmap'),
                 value: _showHeatmap,
                 onChanged: (value) => setState(() => _showHeatmap = value),
               ),
               _buildToggle(
-                label: 'Contours',
+                label: LanguageScope.of(context).t('toggle.contours'),
                 value: _showContours,
                 onChanged: (value) => setState(() => _showContours = value),
               ),
@@ -540,15 +649,15 @@ class _HomePageState extends State<HomePage> {
                       _buildLegendCard(theme),
                       const SizedBox(height: 24),
                       Text(
-                        'Pin severity (mm)',
+                        LanguageScope.of(context).t('sidebar.pinSeverity'),
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
                       _PinLegendRow(
                         color: colorForPinMeasurement(
-                          pinGreenThresholdMm - 0.01,
+                          pinGreenThresholdMm - 0.009,
                         ),
-                        label: 'Low',
+                        label: LanguageScope.of(context).t('pin.low'),
                         range:
                             '0 – ${pinGreenThresholdMm.toStringAsFixed(0)} mm',
                       ),
@@ -556,15 +665,15 @@ class _HomePageState extends State<HomePage> {
                         color: colorForPinMeasurement(
                           (pinGreenThresholdMm + pinAmberThresholdMm) / 2,
                         ),
-                        label: 'Moderate',
+                        label: LanguageScope.of(context).t('pin.moderate'),
                         range:
                             '${pinGreenThresholdMm.toStringAsFixed(0)} – ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
                       ),
                       _PinLegendRow(
                         color: colorForPinMeasurement(
-                          pinAmberThresholdMm + 0.01,
+                          pinAmberThresholdMm + 0.009,
                         ),
-                        label: 'High',
+                        label: LanguageScope.of(context).t('pin.high'),
                         range: '> ${pinAmberThresholdMm.toStringAsFixed(0)} mm',
                       ),
                     ],
@@ -573,7 +682,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Data refreshes every 2 minutes.',
+                LanguageScope.of(context).t('refresh.info'),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: shizukuPrimary.withOpacity(0.6),
                 ),
@@ -607,7 +716,10 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Precipitation scale', style: theme.textTheme.titleMedium),
+          Text(
+            LanguageScope.of(context).t('precipitation.scale'),
+            style: theme.textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           Container(
             height: 16,
@@ -654,9 +766,16 @@ class _HomePageState extends State<HomePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(cls.label, style: theme.textTheme.bodyMedium),
                         Text(
-                          cls.description,
+                          LanguageScope.of(
+                            context,
+                          ).t('intensity.' + _intensityKey(cls) + '.label'),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        Text(
+                          LanguageScope.of(
+                            context,
+                          ).t('intensity.' + _intensityKey(cls) + '.desc'),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: shizukuPrimary.withOpacity(0.6),
                           ),
@@ -670,6 +789,16 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  String _intensityKey(IntensityClass cls) {
+    final label = cls.label.toLowerCase();
+    if (label.startsWith('trace')) return 'trace';
+    if (label.startsWith('light')) return 'light';
+    if (label.startsWith('moderate')) return 'moderate';
+    if (label.startsWith('heavy')) return 'heavy';
+    if (label.startsWith('intense')) return 'intense';
+    return 'violent';
   }
 
   Widget _buildToggle({
@@ -708,7 +837,7 @@ class _HomePageState extends State<HomePage> {
         ),
         child: Center(
           child: Text(
-            'Timeline data is not available yet.',
+            LanguageScope.of(context).t('timeline.empty'),
             style: theme.textTheme.bodyMedium,
           ),
         ),
@@ -717,6 +846,12 @@ class _HomePageState extends State<HomePage> {
 
     final selectedTime = _timeline[_activeTimelineIndex];
     final isLatest = _activeTimelineIndex == _timeline.length - 1;
+    final now = DateTime.now();
+    final timeDiff = now.difference(selectedTime).abs();
+    final isLive =
+        isLatest &&
+        timeDiff.inMinutes < 10; // Consider live if within 10 minutes
+
     final formatted = DateFormat('MMM d, HH:mm').format(selectedTime.toLocal());
 
     return Container(
@@ -739,17 +874,31 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Map timeline', style: theme.textTheme.titleMedium),
+              Text(
+                LanguageScope.of(context).t('map.timeline'),
+                style: theme.textTheme.titleMedium,
+              ),
               Row(
                 children: [
-                  if (isLatest) ...[
+                  if (isLive) ...[
                     const Icon(
                       Icons.wifi_tethering,
                       size: 16,
                       color: shizukuPrimary,
                     ),
                     const SizedBox(width: 6),
-                    Text('Live', style: theme.textTheme.bodySmall),
+                    Text(
+                      LanguageScope.of(context).t('timeline.live'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(width: 12),
+                  ] else if (isLatest) ...[
+                    const Icon(Icons.schedule, size: 16, color: Colors.orange),
+                    const SizedBox(width: 6),
+                    Text(
+                      LanguageScope.of(context).t('timeline.latest'),
+                      style: theme.textTheme.bodySmall,
+                    ),
                     const SizedBox(width: 12),
                   ],
                   Text(formatted, style: theme.textTheme.bodySmall),
@@ -768,7 +917,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Drag the slider to inspect previous grid runs.',
+            LanguageScope.of(context).t('timeline.dragSlider'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: shizukuPrimary.withOpacity(0.6),
             ),
@@ -785,23 +934,34 @@ class _HomePageState extends State<HomePage> {
     }
 
     final target = _timeline[index];
-    final cachedOverlay = _gridOverlays[target];
-    final cachedSnapshot = _gridSnapshots[target];
 
     setState(() {
       _activeTimelineIndex = index;
       _selectedTimestamp = target;
-      if (cachedOverlay != null && cachedSnapshot != null) {
-        _updateActiveOverlay(cachedSnapshot, cachedOverlay);
-        _isGridLoading = false;
-      } else {
-        _isGridLoading = true;
-      }
+      // Don't update overlay immediately - wait for debounce
     });
 
-    if (cachedOverlay == null || cachedSnapshot == null) {
-      _ensureGridLoaded(target);
-    }
+    // Cancel any pending debounce timer
+    _debounceTimer?.cancel();
+    // Start a new timer to update data after 1 second
+    _debounceTimer = Timer(const Duration(seconds: 1), () {
+      print('Debounced slider change executing for timestamp: ${target}');
+      final cachedOverlay = _gridOverlays[target];
+      final cachedSnapshot = _gridSnapshots[target];
+
+      setState(() {
+        if (cachedOverlay != null && cachedSnapshot != null) {
+          _updateActiveOverlay(cachedSnapshot, cachedOverlay);
+          _isGridLoading = false;
+        } else {
+          _isGridLoading = true;
+        }
+      });
+
+      if (cachedOverlay == null || cachedSnapshot == null) {
+        _ensureGridLoaded(target);
+      }
+    });
   }
 
   Future<_GridOverlayAssets?> _buildGridOverlay(GridSnapshot snapshot) async {
@@ -820,7 +980,7 @@ class _HomePageState extends State<HomePage> {
       for (var x = 0; x < cols; x++) {
         final offset = (y * cols + x) * 4;
         final value = sourceRow[x];
-        if (value.isNaN) {
+        if (value.isNaN || value < 0.009) {
           pixels[offset] = 0;
           pixels[offset + 1] = 0;
           pixels[offset + 2] = 0;
@@ -850,9 +1010,8 @@ class _HomePageState extends State<HomePage> {
         intensity,
         VisualizationMode.contour,
       ).withOpacity(0.9);
-      final points = feature.coordinates
-          .map((pair) => LatLng(pair[1], pair[0]))
-          .toList();
+      final points =
+          feature.coordinates.map((pair) => LatLng(pair[1], pair[0])).toList();
       polylines.add(
         Polyline(points: points, color: strokeColor, strokeWidth: 2),
       );
@@ -968,6 +1127,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _gridSnapshots[timestamp] = snapshot;
         _gridOverlays[timestamp] = overlay;
+        print('Cached grid data for timestamp: ${timestamp}');
         _selectedTimestamp = timestamp;
         _activeTimelineIndex = _timeline.indexOf(timestamp);
         _updateActiveOverlay(snapshot, overlay);
@@ -976,9 +1136,15 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       if (!mounted) return;
+      // Don't show abort errors as user-facing errors
+      final errorMessage =
+          e.toString().contains('aborted') ||
+                  e.toString().contains('AbortError')
+              ? null
+              : 'Failed to load grid data: $e';
       setState(() {
         if (isInitial) {
-          _errorMessage = 'Failed to load grid data: $e';
+          _errorMessage = errorMessage;
           _isLoading = false;
         }
         _isGridLoading = false;
@@ -996,9 +1162,10 @@ class _SensorMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = colorForPinMeasurement(measurement.valueMm);
-    final severity = pinSeverityLabel(measurement.valueMm);
+    final severityKey = pinSeverityKey(measurement.valueMm);
+    final severityLabel = LanguageScope.of(context).t(severityKey);
     final tooltip =
-        '${measurement.name ?? measurement.sensorId}\n${measurement.valueMm.toStringAsFixed(2)} mm • $severity\nLat: ${measurement.lat.toStringAsFixed(4)}, Lon: ${measurement.lon.toStringAsFixed(4)}\nAddress: Pending lookup';
+        '${measurement.name ?? measurement.sensorId}\n${measurement.valueMm.toStringAsFixed(2)} mm • $severityLabel\nLat: ${measurement.lat.toStringAsFixed(4)}, Lon: ${measurement.lon.toStringAsFixed(4)}\nAddress: Pending lookup';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1037,7 +1204,7 @@ class _SensorMarker extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  severity,
+                  severityLabel,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 8,

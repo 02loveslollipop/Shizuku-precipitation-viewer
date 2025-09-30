@@ -81,9 +81,8 @@ class GridAvailability {
             ?.map((t) => t as String)
             .toList() ??
         [];
-    final timestamps = timestampStrings
-        .map((s) => DateTime.parse(s).toUtc())
-        .toList();
+    final timestamps =
+        timestampStrings.map((s) => DateTime.parse(s).toUtc()).toList();
 
     DateTime? latest;
     if (json['latest'] is String) {
@@ -114,9 +113,10 @@ class GridData {
 
     List<double>? bounds;
     if (json['bounds'] is List) {
-      bounds = (json['bounds'] as List<dynamic>)
-          .map((b) => (b as num).toDouble())
-          .toList();
+      bounds =
+          (json['bounds'] as List<dynamic>)
+              .map((b) => (b as num).toDouble())
+              .toList();
     }
 
     return GridData(
@@ -213,9 +213,10 @@ class ApiClient {
       throw Exception('Failed to load sensors (${sensorsResp.statusCode})');
     }
     final sensorJson = jsonDecode(sensorsResp.body) as Map<String, dynamic>;
-    final sensors = (sensorJson['sensors'] as List<dynamic>)
-        .map((s) => Sensor.fromJson(s as Map<String, dynamic>))
-        .toList();
+    final sensors =
+        (sensorJson['sensors'] as List<dynamic>)
+            .map((s) => Sensor.fromJson(s as Map<String, dynamic>))
+            .toList();
 
     final latestResp = await _client.get(Uri.parse('$apiBaseUrl/now'));
     if (latestResp.statusCode != 200) {
@@ -224,9 +225,10 @@ class ApiClient {
       );
     }
     final latestJson = jsonDecode(latestResp.body) as Map<String, dynamic>;
-    final measurements = (latestJson['measurements'] as List<dynamic>)
-        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-        .toList();
+    final measurements =
+        (latestJson['measurements'] as List<dynamic>)
+            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+            .toList();
 
     final bySensor = {for (final m in measurements) m.sensorId: m};
 
@@ -254,9 +256,10 @@ class ApiClient {
     }
 
     final latestJson = jsonDecode(response.body) as Map<String, dynamic>;
-    final measurements = (latestJson['measurements'] as List<dynamic>)
-        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-        .toList();
+    final measurements =
+        (latestJson['measurements'] as List<dynamic>)
+            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+            .toList();
 
     if (measurements.isEmpty) return [];
 
@@ -285,9 +288,10 @@ class ApiClient {
       return [];
     }
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
-    final measurements = (json['measurements'] as List<dynamic>)
-        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-        .toList();
+    final measurements =
+        (json['measurements'] as List<dynamic>)
+            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+            .toList();
     return measurements
         .map((m) => SeriesPoint(timestamp: m.timestamp, value: m.valueMm))
         .toList()
@@ -410,8 +414,25 @@ class ApiClient {
         return null;
       }
       final gridJson = _decodeGridJson(gridResp.bodyBytes);
-      final contourFeatures = await _fetchContours(contoursUrl);
-      return _parseGridSnapshot(gridJson, contourFeatures);
+      List<GridContourFeature> contourFeatures = const [];
+      try {
+        contourFeatures = await _fetchContours(contoursUrl);
+        if (contourFeatures.isNotEmpty) {
+          print('Fetched ${contourFeatures.length} contours');
+        }
+      } catch (e) {
+        // If contour fetching fails, continue without contours
+        // Don't log abort errors as they're expected
+        if (!e.toString().contains('aborted') &&
+            !e.toString().contains('AbortError')) {
+          // Could log other errors here if needed
+        }
+      }
+      final snapshot = _parseGridSnapshot(gridJson, contourFeatures);
+      if (snapshot != null) {
+        print('Fetched grid for timestamp: ${snapshot.timestamp}');
+      }
+      return snapshot;
     } catch (_) {
       return null;
     }
@@ -452,9 +473,10 @@ class ApiClient {
             final coords =
                 (geometry['coordinates'] as List<dynamic>?)
                     ?.map(
-                      (pair) => (pair as List<dynamic>)
-                          .map((v) => (v as num).toDouble())
-                          .toList(),
+                      (pair) =>
+                          (pair as List<dynamic>)
+                              .map((v) => (v as num).toDouble())
+                              .toList(),
                     )
                     .toList() ??
                 const [];
@@ -467,7 +489,13 @@ class ApiClient {
           })
           .whereType<GridContourFeature>()
           .toList(growable: false);
-    } catch (_) {
+    } catch (e) {
+      // Don't return empty list for abort errors - let them propagate
+      // as they indicate temporary network issues, not missing data
+      if (e.toString().contains('aborted') ||
+          e.toString().contains('AbortError')) {
+        rethrow;
+      }
       return const [];
     }
   }
@@ -498,15 +526,17 @@ class ApiClient {
 
     final thresholdsDynamic =
         gridJson['intensity_thresholds'] as List<dynamic>? ?? const [];
-    final thresholds = thresholdsDynamic
-        .whereType<Map<String, dynamic>>()
-        .map((entry) => (entry['value'] as num).toDouble())
-        .toList();
+    final thresholds =
+        thresholdsDynamic
+            .whereType<Map<String, dynamic>>()
+            .map((entry) => (entry['value'] as num).toDouble())
+            .toList();
 
     final timestampStr = gridJson['timestamp'] as String?;
-    final timestamp = timestampStr != null
-        ? DateTime.parse(timestampStr).toUtc()
-        : DateTime.now().toUtc();
+    final timestamp =
+        timestampStr != null
+            ? DateTime.parse(timestampStr).toUtc()
+            : DateTime.now().toUtc();
 
     return GridSnapshot(
       timestamp: timestamp,
@@ -562,9 +592,8 @@ class ApiClient {
     if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
       return candidate;
     }
-    final trimmed = candidate.startsWith('/')
-        ? candidate.substring(1)
-        : candidate;
+    final trimmed =
+        candidate.startsWith('/') ? candidate.substring(1) : candidate;
     final base = blobBaseUrl.replaceAll(RegExp(r'/+$'), '');
     final buffer = StringBuffer(base);
     if (buffer.isNotEmpty) {

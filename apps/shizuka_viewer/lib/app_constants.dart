@@ -109,9 +109,8 @@ IntensityClass findIntensityClass(double value) {
 
 Color colorForIntensityClass(IntensityClass cls, VisualizationMode mode) {
   if (mode == VisualizationMode.contour) {
-    final representative = cls.maxMm == null
-        ? cls.minMm
-        : (cls.minMm + cls.maxMm!) / 2;
+    final representative =
+        cls.maxMm == null ? cls.minMm : (cls.minMm + cls.maxMm!) / 2;
     return _colorForHeatmapValue(representative);
   }
   return _colorForHeatmapValue(cls.minMm);
@@ -139,6 +138,17 @@ String pinSeverityLabel(double value) {
     return 'Moderate';
   }
   return 'High';
+}
+
+/// Returns the translation key for pin severity given a measurement value.
+String pinSeverityKey(double value) {
+  if (value < pinGreenThresholdMm) {
+    return 'pin.low';
+  }
+  if (value < pinAmberThresholdMm) {
+    return 'pin.moderate';
+  }
+  return 'pin.high';
 }
 
 List<Color> heatmapGradientColors() =>

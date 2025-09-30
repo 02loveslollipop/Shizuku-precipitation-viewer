@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app_constants.dart';
+import '../localization.dart';
 
 class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ShizukuAppBar({super.key, required this.subtitle});
@@ -14,6 +15,7 @@ class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lang = LanguageScope.of(context);
     return AppBar(
       titleSpacing: 0,
       title: Row(
@@ -29,6 +31,24 @@ class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ],
       ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: PopupMenuButton<String>(
+            tooltip: 'Language',
+            icon: const Icon(Icons.translate, color: shizukuPrimary),
+            onSelected: (code) {
+              lang.setLocale(code);
+            },
+            itemBuilder:
+                (ctx) => [
+                  const PopupMenuItem(value: 'en', child: Text('English')),
+                  const PopupMenuItem(value: 'es', child: Text('Español')),
+                  const PopupMenuItem(value: 'ja', child: Text('日本語')),
+                ],
+          ),
+        ),
+      ],
       backgroundColor: Colors.white,
       foregroundColor: shizukuPrimary,
       elevation: 1,

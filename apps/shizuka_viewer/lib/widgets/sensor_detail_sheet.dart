@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../api/api_client.dart';
 import '../app_constants.dart';
+import '../localization.dart';
 
 class SensorDetailSheet extends StatelessWidget {
   const SensorDetailSheet({
@@ -19,7 +20,8 @@ class SensorDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final intensity = findIntensityClass(measurement.valueMm);
-    final severity = pinSeverityLabel(measurement.valueMm);
+    final severityKey = pinSeverityKey(measurement.valueMm);
+    final severity = LanguageScope.of(context).t(severityKey);
     final severityColor = colorForPinMeasurement(measurement.valueMm);
     final formatter = DateFormat('MMM d, HH:mm');
 
@@ -35,14 +37,18 @@ class SensorDetailSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Location: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}',
+            '${LanguageScope.of(context).t('Location')}: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}',
           ),
-          const Text('Address: Not available'),
-          Text('Measurement: ${measurement.valueMm.toStringAsFixed(2)} mm'),
-          Text('Intensity: ${intensity.label}'),
+          Text('${LanguageScope.of(context).t('Address')}: Not available'),
+          Text(
+            '${LanguageScope.of(context).t('Measurement')}: ${measurement.valueMm.toStringAsFixed(2)} mm',
+          ),
+          Text(
+            '${LanguageScope.of(context).t('Intensity')}: ${LanguageScope.of(context).t('intensity.' + _intensityKey(intensity) + '.label')}',
+          ),
           Row(
             children: [
-              const Text('Severity: '),
+              Text('${LanguageScope.of(context).t('Severity')}: '),
               Container(
                 width: 10,
                 height: 10,
@@ -56,7 +62,7 @@ class SensorDetailSheet extends StatelessWidget {
             ],
           ),
           Text(
-            'Timestamp: ${formatter.format(measurement.timestamp.toLocal())}',
+            '${LanguageScope.of(context).t('Timestamp')}: ${formatter.format(measurement.timestamp.toLocal())}',
           ),
           const SizedBox(height: 12),
           if (history.isEmpty)
@@ -94,11 +100,21 @@ class SensorDetailSheet extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: Text(LanguageScope.of(context).t('Close')),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _intensityKey(IntensityClass cls) {
+    final label = cls.label.toLowerCase();
+    if (label.startsWith('trace')) return 'trace';
+    if (label.startsWith('light')) return 'light';
+    if (label.startsWith('moderate')) return 'moderate';
+    if (label.startsWith('heavy')) return 'heavy';
+    if (label.startsWith('intense')) return 'intense';
+    return 'violent';
   }
 }
