@@ -2,12 +2,6 @@ import 'package:flutter/material.dart';
 
 enum VisualizationMode { heatmap, contour }
 
-const String mapboxAccessToken = String.fromEnvironment(
-  'MAPBOX_ACCESS_TOKEN',
-  defaultValue:
-      'pk.eyJ1IjoiMDJsb3Zlc2xvbGxpcG9wIiwiYSI6ImNtZzVjZWtsdDAzOGYycXEyZGttZm85NngifQ.xkNii295tuT1s7eMs0Nrhg',
-);
-
 const String apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'https://api.shizuku.02labs.me',
