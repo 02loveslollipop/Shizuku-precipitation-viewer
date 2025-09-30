@@ -244,7 +244,7 @@ const gridByTimestampSQL = `
 // GetGridByTimestamp returns grid information for a specific timestamp.
 func (s *Store) GetGridByTimestamp(ctx context.Context, timestamp time.Time) (*GridInfo, error) {
 	row := s.pool.QueryRow(ctx, gridByTimestampSQL, timestamp)
-	
+
 	var g GridInfo
 	var boundsJSON []byte
 	if err := row.Scan(
