@@ -67,6 +67,8 @@ class _HomePageState extends State<HomePage> {
   bool _showPins = true;
   bool _showHeatmap = true;
   bool _showContours = true;
+  // Mobile-only: whether the compressed (button) sidebar is open
+  bool _mobileSidebarOpen = false;
 
   Timer? _refreshTimer;
   bool _refreshInFlight = false;
@@ -108,7 +110,10 @@ class _HomePageState extends State<HomePage> {
     _refreshInFlight = false;
   }
 
-  Future<void> _loadDataProgressive({bool initial = false, bool silent = false}) async {
+  Future<void> _loadDataProgressive({
+    bool initial = false,
+    bool silent = false,
+  }) async {
     try {
       // Load measurements and grid availability in parallel
       final measurementsFuture = _apiClient.fetchLatestMeasurements();
@@ -129,12 +134,14 @@ class _HomePageState extends State<HomePage> {
         final newTimeline = availability.timestamps;
         // Determine previous latest to decide whether we should auto-advance
         final previousLatest = _timeline.isNotEmpty ? _timeline.last : null;
-        final wasSelectedLatest = previousLatest != null &&
+        final wasSelectedLatest =
+            previousLatest != null &&
             _selectedTimestamp != null &&
             _selectedTimestamp == previousLatest;
 
         // Update the timeline if it changed
-        final timelineChanged = _timeline.isEmpty || !_listsEqual(_timeline, newTimeline);
+        final timelineChanged =
+            _timeline.isEmpty || !_listsEqual(_timeline, newTimeline);
         if (timelineChanged) {
           _timeline = newTimeline;
         }
@@ -326,7 +333,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _measurements = updated;
     });
-  // Updated ${updated.length} sensors from grid ${snapshot.timestamp}
+    // Updated ${updated.length} sensors from grid ${snapshot.timestamp}
   }
 
   double? _sampleGridValueAtLatLng(
@@ -386,6 +393,11 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final t = LanguageScope.of(context);
+    final isMobile = MediaQuery.of(context).size.width < 700;
+    // If we're no longer mobile, ensure mobile sidebar is closed
+    if (!isMobile && _mobileSidebarOpen) {
+      _mobileSidebarOpen = false;
+    }
     return Scaffold(
       appBar: ShizukuAppBar(subtitle: t.t('app.subtitle.mapViewer')),
       body:
@@ -393,42 +405,109 @@ class _HomePageState extends State<HomePage> {
               ? const Center(child: CircularProgressIndicator())
               : _errorMessage != null
               ? _buildError(theme)
-              : Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildSidebar(theme),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
+              : (isMobile
+                  // Mobile: map fills screen and sidebar is toggled via button
+                  ? Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.06),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: _buildMap(),
+                                  ),
+                                ),
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: _buildMap(),
-                              ),
+                              const SizedBox(height: 16),
+                              _buildTimelinePanel(theme),
+                            ],
+                          ),
+                        ),
+                        // Menu button to open sidebar
+                        Positioned(
+                          top: 20,
+                          left: 20,
+                          child: FloatingActionButton.small(
+                            onPressed: () => setState(() => _mobileSidebarOpen = !_mobileSidebarOpen),
+                            child: const Icon(Icons.menu),
+                          ),
+                        ),
+                        // Sidebar overlay
+                        if (_mobileSidebarOpen)
+                          Positioned.fill(
+                            child: Row(
+                              children: [
+                                // Sidebar panel (tap inside should not close)
+                                SizedBox(
+                                  width: 260,
+                                  child: Material(
+                                    elevation: 8,
+                                    child: SafeArea(child: _buildSidebar(theme)),
+                                  ),
+                                ),
+                                // Backdrop: tapping closes the sidebar
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _mobileSidebarOpen = false),
+                                    child: Container(color: Colors.black.withOpacity(0.35)),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          _buildTimelinePanel(theme),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                      ],
+                    )
+                  // Desktop/iPad: original layout with left sidebar
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildSidebar(theme),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.06),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: _buildMap(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _buildTimelinePanel(theme),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _loadData(),
         icon: const Icon(Icons.refresh),
@@ -968,7 +1047,6 @@ class _HomePageState extends State<HomePage> {
     _debounceTimer?.cancel();
     // Start a new timer to update data after 1 second
     _debounceTimer = Timer(const Duration(seconds: 1), () async {
-
       // Always refresh sensor measurements from API for the target timestamp
       // This ensures pins reflect the latest station data before applying
       // gridded overrides.
