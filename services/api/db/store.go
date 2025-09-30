@@ -279,12 +279,12 @@ func (s *Store) GetGridByTimestamp(ctx context.Context, timestamp time.Time) (*G
 // SensorSnapshot represents a sensor with an optional measurement at or before
 // the requested timestamp.
 type SensorSnapshot struct {
-	ID         string   `json:"id"`
-	Name       *string  `json:"name,omitempty"`
-	ProviderID *string  `json:"provider_id,omitempty"`
-	Lat        float64  `json:"lat"`
-	Lon        float64  `json:"lon"`
-	City       *string  `json:"city,omitempty"`
+	ID         string  `json:"id"`
+	Name       *string `json:"name,omitempty"`
+	ProviderID *string `json:"provider_id,omitempty"`
+	Lat        float64 `json:"lat"`
+	Lon        float64 `json:"lon"`
+	City       *string `json:"city,omitempty"`
 
 	// Measurement fields (may be nil if no measurement exists <= requested ts)
 	Ts         *time.Time `json:"ts,omitempty"`

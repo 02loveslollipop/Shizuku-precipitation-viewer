@@ -36,13 +36,13 @@ class SensorDetailSheet extends StatelessWidget {
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-            Text(
-              '${LanguageScope.of(context).t('Location')}: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}',
-            ),
-            Text('${LanguageScope.of(context).t('Address')}: Not available'),
-            Text(
-              '${LanguageScope.of(context).t('Measurement')}: ${measurement.valueMm.toStringAsFixed(4)} mm',
-            ),
+          Text(
+            '${LanguageScope.of(context).t('Location')}: ${measurement.lat.toStringAsFixed(4)}, ${measurement.lon.toStringAsFixed(4)}',
+          ),
+          Text('${LanguageScope.of(context).t('Address')}: Not available'),
+          Text(
+            '${LanguageScope.of(context).t('Measurement')}: ${measurement.valueMm.toStringAsFixed(4)} mm',
+          ),
           Text(
             '${LanguageScope.of(context).t('Intensity')}: ${LanguageScope.of(context).t('intensity.' + _intensityKey(intensity) + '.label')}',
           ),
