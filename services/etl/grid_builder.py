@@ -144,17 +144,33 @@ class GridBuilder:
         # Also produce a compressed JPEG (RGB) for quick preview/storage. Convert colormap result
         # to RGB and encode as JPEG with reasonable quality to save space.
         try:
-            norm = colors.Normalize(vmin=np.nanmin(quad_grid), vmax=np.nanmax(quad_grid))
-            rgba = cm.get_cmap("viridis")(norm(quad_grid))
-            rgba[..., 3] = np.where(np.isnan(quad_grid), 0.0, 1.0)
-            rgb = np.delete(rgba, 3, axis=2)  # drop alpha
-            rgb_uint8 = (np.clip(rgb, 0.0, 1.0) * 255).astype(np.uint8)
-            # Flip vertically so the produced image aligns with map bounds
-            rgb_uint8 = np.flipud(rgb_uint8)
-            img = Image.fromarray(rgb_uint8)
+            # Render a matplotlib figure (pcolormesh + contours + colorbar) similarly to the
+            # interactive notebook so the preview JPEG resembles the plotted output.
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+            # pcolormesh expects x, y to be 1D grid coordinates
+            mesh = ax.pcolormesh(x_coords, y_coords, quad_grid, cmap="viridis", shading="auto")
+            # draw contour lines using computed levels (if available)
+            try:
+                contours = ax.contour(x_coords, y_coords, quad_grid, levels=levels, colors="white", linewidths=0.7)
+                ax.clabel(contours, inline=True, fontsize=8, fmt="%.1f")
+            except Exception:
+                # If contouring fails for any reason, continue without labels
+                pass
+
+            ax.set_title("Quadratic Interpolated Grid (EPSG:3857)")
+            ax.set_xlabel("x (m)")
+            ax.set_ylabel("y (m)")
+
+            # Add a colorbar to the figure
+            fig.colorbar(mesh, ax=ax, label="Precipitation (mm)")
+            plt.tight_layout()
+
             buf = BytesIO()
-            img.save(buf, format="JPEG", quality=70, optimize=True)
+            # Save as JPEG using matplotlib's savefig (Pillow backend handles quality)
+            fig.savefig(buf, format="jpeg", quality=70, optimize=True)
             jpeg_bytes = buf.getvalue()
+            plt.close(fig)
         except Exception:
             jpeg_bytes = None
 
