@@ -10,10 +10,12 @@ from pyproj import Transformer
 from scipy.signal import convolve2d
 from scipy.interpolate import griddata
 
+import logging
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend suitable for headless servers
 from matplotlib import cm, colors
 import matplotlib.pyplot as plt
 from io import BytesIO
-from PIL import Image
 
 @dataclass(slots=True)
 class GridArtifacts:
@@ -149,10 +151,10 @@ class GridBuilder:
             fig, ax = plt.subplots(figsize=(10, 6))
 
             # pcolormesh expects x, y to be 1D grid coordinates
-            mesh = ax.pcolormesh(x_coords, y_coords, quad_grid, cmap="viridis", shading="auto")
+            mesh = ax.pcolormesh(x_grid, y_grid, quad_grid, cmap="viridis", shading="auto")
             # draw contour lines using computed levels (if available)
             try:
-                contours = ax.contour(x_coords, y_coords, quad_grid, levels=levels, colors="white", linewidths=0.7)
+                contours = ax.contour(x_grid, y_grid, quad_grid, levels=levels, colors="white", linewidths=0.7)
                 ax.clabel(contours, inline=True, fontsize=8, fmt="%.1f")
             except Exception:
                 # If contouring fails for any reason, continue without labels
@@ -171,7 +173,9 @@ class GridBuilder:
             fig.savefig(buf, format="jpeg", quality=70, optimize=True)
             jpeg_bytes = buf.getvalue()
             plt.close(fig)
-        except Exception:
+        except Exception as exc:
+            # Log the exception so we can diagnose why JPEG generation failed (missing Pillow, backend issues, etc.)
+            logging.getLogger(__name__).exception("Failed to render JPEG preview: %s", exc)
             jpeg_bytes = None
 
         return GridArtifacts(
