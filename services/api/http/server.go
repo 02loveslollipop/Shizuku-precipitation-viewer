@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	encjson "encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -79,6 +80,9 @@ func (s *Server) registerRoutes() {
 	s.engine.GET("/grid/latest", s.handleGridLatest)
 	s.engine.GET("/grid/available", s.handleGridAvailable)
 	s.engine.GET("/grid/:timestamp", s.handleGridByTimestamp)
+
+	// Dashboard summary: aggregates and preview image URL
+	s.engine.GET("/dashboard/summary", s.handleDashboardSummary)
 
 	// Snapshot endpoint: returns one measurement per sensor at-or-before ts
 	// Example: GET /snapshot?ts=2025-09-30T12:00:00Z&clean=true
@@ -359,4 +363,67 @@ func (s *Server) handleGridByTimestamp(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) handleDashboardSummary(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	averages, err := s.store.GetAverages(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Attempt to retrieve grid latest pointer to extract any preview URL
+	gridURL := strings.TrimRight(s.cfg.BlobBaseURL, "/") + "/" + strings.TrimLeft(s.cfg.GridLatestPath, "/")
+	previewURL := ""
+	if gridURL != "" {
+		// fetch pointer JSON from blob store (best-effort)
+		client := &http.Client{Timeout: 10 * time.Second}
+		if resp, err := client.Get(gridURL); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				var ptr map[string]interface{}
+				if err := encjson.NewDecoder(resp.Body).Decode(&ptr); err == nil {
+					// ETL may store grid_preview_jpeg_url or preview_jpeg_url
+					if v, ok := ptr["grid_preview_jpeg_url"].(string); ok && v != "" {
+						previewURL = v
+					} else if v, ok := ptr["preview_jpeg_url"].(string); ok && v != "" {
+						previewURL = v
+					}
+				}
+			}
+		}
+	}
+
+	resp := gin.H{"averages": gin.H{}}
+	if averages != nil {
+		if averages.Avg3h != nil {
+			resp["averages"].(gin.H)["3h"] = *averages.Avg3h
+		} else {
+			resp["averages"].(gin.H)["3h"] = nil
+		}
+		if averages.Avg6h != nil {
+			resp["averages"].(gin.H)["6h"] = *averages.Avg6h
+		} else {
+			resp["averages"].(gin.H)["6h"] = nil
+		}
+		if averages.Avg12h != nil {
+			resp["averages"].(gin.H)["12h"] = *averages.Avg12h
+		} else {
+			resp["averages"].(gin.H)["12h"] = nil
+		}
+		if averages.Avg24h != nil {
+			resp["averages"].(gin.H)["24h"] = *averages.Avg24h
+		} else {
+			resp["averages"].(gin.H)["24h"] = nil
+		}
+	}
+
+	if previewURL != "" {
+		resp["grid_preview_jpeg_url"] = previewURL
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

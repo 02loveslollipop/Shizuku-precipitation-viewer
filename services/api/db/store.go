@@ -372,3 +372,36 @@ func (s *Store) SnapshotAtTimestamp(ctx context.Context, ts time.Time, useClean 
 
 	return out, rows.Err()
 }
+
+// AveragesResult holds average precipitation values for different windows.
+type AveragesResult struct {
+	Avg3h  *float64 `json:"3h,omitempty"`
+	Avg6h  *float64 `json:"6h,omitempty"`
+	Avg12h *float64 `json:"12h,omitempty"`
+	Avg24h *float64 `json:"24h,omitempty"`
+}
+
+const averagesSQL = `
+SELECT
+  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '3 hours') AS avg_3h,
+  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '6 hours') AS avg_6h,
+  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '12 hours') AS avg_12h,
+  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '24 hours') AS avg_24h
+`
+
+// GetAverages computes average precipitation (value_mm) across all sensors
+// for the last 3, 6, 12 and 24 hours. Null averages are possible when no
+// measurements exist in the given window.
+func (s *Store) GetAverages(ctx context.Context) (*AveragesResult, error) {
+	row := s.pool.QueryRow(ctx, averagesSQL)
+	var a3, a6, a12, a24 *float64
+	if err := row.Scan(&a3, &a6, &a12, &a24); err != nil {
+		return nil, err
+	}
+	return &AveragesResult{
+		Avg3h:  a3,
+		Avg6h:  a6,
+		Avg12h: a12,
+		Avg24h: a24,
+	}, nil
+}
