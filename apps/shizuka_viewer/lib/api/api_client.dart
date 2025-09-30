@@ -69,6 +69,65 @@ class GridLatestBundle {
   final List<GridHistoryEntry> history;
 }
 
+class GridAvailability {
+  GridAvailability({required this.timestamps, this.latest});
+
+  final List<DateTime> timestamps;
+  final DateTime? latest;
+
+  factory GridAvailability.fromJson(Map<String, dynamic> json) {
+    final timestampStrings =
+        (json['timestamps'] as List<dynamic>?)
+            ?.map((t) => t as String)
+            .toList() ??
+        [];
+    final timestamps = timestampStrings
+        .map((s) => DateTime.parse(s).toUtc())
+        .toList();
+
+    DateTime? latest;
+    if (json['latest'] is String) {
+      latest = DateTime.parse(json['latest'] as String).toUtc();
+    }
+
+    return GridAvailability(timestamps: timestamps, latest: latest);
+  }
+}
+
+class GridData {
+  GridData({
+    required this.timestamp,
+    this.gridUrl,
+    this.contoursUrl,
+    this.bounds,
+  });
+
+  final DateTime timestamp;
+  final String? gridUrl;
+  final String? contoursUrl;
+  final List<double>? bounds;
+
+  factory GridData.fromJson(Map<String, dynamic> json) {
+    final timestamp = DateTime.parse(json['timestamp'] as String).toUtc();
+    final gridUrl = json['grid_url'] as String?;
+    final contoursUrl = json['contours_url'] as String?;
+
+    List<double>? bounds;
+    if (json['bounds'] is List) {
+      bounds = (json['bounds'] as List<dynamic>)
+          .map((b) => (b as num).toDouble())
+          .toList();
+    }
+
+    return GridData(
+      timestamp: timestamp,
+      gridUrl: gridUrl,
+      contoursUrl: contoursUrl,
+      bounds: bounds,
+    );
+  }
+}
+
 class Sensor {
   Sensor({
     required this.id,
@@ -154,10 +213,9 @@ class ApiClient {
       throw Exception('Failed to load sensors (${sensorsResp.statusCode})');
     }
     final sensorJson = jsonDecode(sensorsResp.body) as Map<String, dynamic>;
-    final sensors =
-        (sensorJson['sensors'] as List<dynamic>)
-            .map((s) => Sensor.fromJson(s as Map<String, dynamic>))
-            .toList();
+    final sensors = (sensorJson['sensors'] as List<dynamic>)
+        .map((s) => Sensor.fromJson(s as Map<String, dynamic>))
+        .toList();
 
     final latestResp = await _client.get(Uri.parse('$apiBaseUrl/now'));
     if (latestResp.statusCode != 200) {
@@ -166,10 +224,9 @@ class ApiClient {
       );
     }
     final latestJson = jsonDecode(latestResp.body) as Map<String, dynamic>;
-    final measurements =
-        (latestJson['measurements'] as List<dynamic>)
-            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-            .toList();
+    final measurements = (latestJson['measurements'] as List<dynamic>)
+        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+        .toList();
 
     final bySensor = {for (final m in measurements) m.sensorId: m};
 
@@ -197,10 +254,9 @@ class ApiClient {
     }
 
     final latestJson = jsonDecode(response.body) as Map<String, dynamic>;
-    final measurements =
-        (latestJson['measurements'] as List<dynamic>)
-            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-            .toList();
+    final measurements = (latestJson['measurements'] as List<dynamic>)
+        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+        .toList();
 
     if (measurements.isEmpty) return [];
 
@@ -229,10 +285,9 @@ class ApiClient {
       return [];
     }
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
-    final measurements =
-        (json['measurements'] as List<dynamic>)
-            .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
-            .toList();
+    final measurements = (json['measurements'] as List<dynamic>)
+        .map((m) => MeasurementSnapshot.fromJson(m as Map<String, dynamic>))
+        .toList();
     return measurements
         .map((m) => SeriesPoint(timestamp: m.timestamp, value: m.valueMm))
         .toList()
@@ -246,8 +301,9 @@ class ApiClient {
         return null;
       }
 
-      final pointerLocation = (jsonDecode(resp.body) as Map<String, dynamic>)[
-          'grid_url'] as String?;
+      final pointerLocation =
+          (jsonDecode(resp.body) as Map<String, dynamic>)['grid_url']
+              as String?;
       if (pointerLocation == null || pointerLocation.isEmpty) {
         return null;
       }
@@ -296,7 +352,9 @@ class ApiClient {
             timestamp: entryTimestamp,
           );
           if (source != null) {
-            history.add(GridHistoryEntry(timestamp: entryTimestamp, source: source));
+            history.add(
+              GridHistoryEntry(timestamp: entryTimestamp, source: source),
+            );
           }
         }
       }
@@ -308,6 +366,35 @@ class ApiClient {
         source: snapshotSource,
         history: history,
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<GridAvailability?> fetchGridAvailability() async {
+    try {
+      final resp = await _client.get(Uri.parse('$apiBaseUrl/grid/available'));
+      if (resp.statusCode != 200) {
+        return null;
+      }
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      return GridAvailability.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<GridData?> fetchGridData(DateTime timestamp) async {
+    try {
+      final timestampStr = timestamp.toUtc().toIso8601String();
+      final resp = await _client.get(
+        Uri.parse('$apiBaseUrl/grid/$timestampStr'),
+      );
+      if (resp.statusCode != 200) {
+        return null;
+      }
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      return GridData.fromJson(json);
     } catch (_) {
       return null;
     }
@@ -362,12 +449,12 @@ class ApiClient {
             if (props == null || geometry == null) {
               return null;
             }
-            final coords = (geometry['coordinates'] as List<dynamic>?)
+            final coords =
+                (geometry['coordinates'] as List<dynamic>?)
                     ?.map(
-                      (pair) =>
-                          (pair as List<dynamic>)
-                              .map((v) => (v as num).toDouble())
-                              .toList(),
+                      (pair) => (pair as List<dynamic>)
+                          .map((v) => (v as num).toDouble())
+                          .toList(),
                     )
                     .toList() ??
                 const [];
@@ -440,17 +527,27 @@ class ApiClient {
     String? contoursPath,
     DateTime? timestamp,
   }) {
-    final resolvedGridUrl =
-        _resolveUrl(gridUrl ?? gridPath, timestamp, 'grid.json.gz');
+    final resolvedGridUrl = _resolveUrl(
+      gridUrl ?? gridPath,
+      timestamp,
+      'grid.json.gz',
+    );
     if (resolvedGridUrl == null) {
       return null;
     }
-    final resolvedContours =
-        _resolveUrl(contoursUrl ?? contoursPath, timestamp, 'contours.geojson');
+    final resolvedContours = _resolveUrl(
+      contoursUrl ?? contoursPath,
+      timestamp,
+      'contours.geojson',
+    );
     return GridSource(gridUrl: resolvedGridUrl, contoursUrl: resolvedContours);
   }
 
-  String? _resolveUrl(String? candidate, DateTime? timestamp, String fallbackFile) {
+  String? _resolveUrl(
+    String? candidate,
+    DateTime? timestamp,
+    String fallbackFile,
+  ) {
     if (candidate != null && candidate.isNotEmpty) {
       return _ensureAbsoluteUrl(candidate);
     }
@@ -465,7 +562,9 @@ class ApiClient {
     if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
       return candidate;
     }
-    final trimmed = candidate.startsWith('/') ? candidate.substring(1) : candidate;
+    final trimmed = candidate.startsWith('/')
+        ? candidate.substring(1)
+        : candidate;
     final base = blobBaseUrl.replaceAll(RegExp(r'/+$'), '');
     final buffer = StringBuffer(base);
     if (buffer.isNotEmpty) {

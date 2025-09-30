@@ -86,12 +86,62 @@ class _HomePageState extends State<HomePage> {
         _isLoading = true;
         _errorMessage = null;
       });
+      // For initial load, use progressive loading approach
+      await _loadDataProgressive();
     } else if (!silent) {
       setState(() {
         _isGridLoading = true;
       });
+      // For refresh, still use the old approach for now
+      await _loadDataLegacy();
+    } else {
+      // Silent refresh
+      await _loadDataLegacy();
     }
+    _refreshInFlight = false;
+  }
 
+  Future<void> _loadDataProgressive() async {
+    try {
+      // Load measurements and grid availability in parallel
+      final measurementsFuture = _apiClient.fetchLatestMeasurements();
+      final availabilityFuture = _apiClient.fetchGridAvailability();
+
+      final sensors = await measurementsFuture;
+      final availability = await availabilityFuture;
+
+      if (!mounted) return;
+
+      setState(() {
+        _measurements = sensors;
+        _errorMessage = null;
+      });
+
+      if (availability != null && availability.timestamps.isNotEmpty) {
+        // Set up timeline
+        _timeline = availability.timestamps;
+
+        // Load latest grid data
+        final latestTimestamp =
+            availability.latest ?? availability.timestamps.first;
+        await _loadGridForTimestamp(latestTimestamp, isInitial: true);
+      } else {
+        setState(() {
+          _isLoading = false;
+          _isGridLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to load data. $e';
+        _isLoading = false;
+        _isGridLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadDataLegacy() async {
     try {
       final measurementsFuture = _apiClient.fetchLatestMeasurements();
       final gridFuture = _apiClient.fetchLatestGridBundle();
@@ -126,8 +176,6 @@ class _HomePageState extends State<HomePage> {
         _isLoading = false;
         _isGridLoading = false;
       });
-    } finally {
-      _refreshInFlight = false;
     }
   }
 
@@ -271,47 +319,46 @@ class _HomePageState extends State<HomePage> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: const ShizukuAppBar(subtitle: 'Map viewer'),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-              ? _buildError(theme)
-              : Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildSidebar(theme),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: _buildMap(),
-                              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? _buildError(theme)
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildSidebar(theme),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: _buildMap(),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          _buildTimelinePanel(theme),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTimelinePanel(theme),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _loadData(),
         icon: const Icon(Icons.refresh),
@@ -321,15 +368,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMap() {
-    final center =
-        _measurements.isNotEmpty
-            ? LatLng(
-              _measurements.map((m) => m.lat).reduce((a, b) => a + b) /
-                  _measurements.length,
-              _measurements.map((m) => m.lon).reduce((a, b) => a + b) /
-                  _measurements.length,
-            )
-            : const LatLng(6.2442, -75.5812);
+    final center = _measurements.isNotEmpty
+        ? LatLng(
+            _measurements.map((m) => m.lat).reduce((a, b) => a + b) /
+                _measurements.length,
+            _measurements.map((m) => m.lon).reduce((a, b) => a + b) /
+                _measurements.length,
+          )
+        : const LatLng(6.2442, -75.5812);
 
     final layers = <Widget>[
       TileLayer(
@@ -410,11 +456,10 @@ class _HomePageState extends State<HomePage> {
             width: 42,
             height: 42,
             child: Builder(
-              builder:
-                  (context) => _SensorMarker(
-                    measurement: measurement,
-                    onTap: () => _showSensorDetails(measurement),
-                  ),
+              builder: (context) => _SensorMarker(
+                measurement: measurement,
+                onTap: () => _showSensorDetails(measurement),
+              ),
             ),
           ),
         )
@@ -427,9 +472,8 @@ class _HomePageState extends State<HomePage> {
 
     showModalBottomSheet(
       context: context,
-      builder:
-          (context) =>
-              SensorDetailSheet(measurement: measurement, history: history),
+      builder: (context) =>
+          SensorDetailSheet(measurement: measurement, history: history),
     );
   }
 
@@ -806,8 +850,9 @@ class _HomePageState extends State<HomePage> {
         intensity,
         VisualizationMode.contour,
       ).withOpacity(0.9);
-      final points =
-          feature.coordinates.map((pair) => LatLng(pair[1], pair[0])).toList();
+      final points = feature.coordinates
+          .map((pair) => LatLng(pair[1], pair[0]))
+          .toList();
       polylines.add(
         Polyline(points: points, color: strokeColor, strokeWidth: 2),
       );
@@ -861,6 +906,84 @@ class _HomePageState extends State<HomePage> {
       completer.complete(byteData.buffer.asUint8List());
     });
     return completer.future;
+  }
+
+  Future<void> _loadGridForTimestamp(
+    DateTime timestamp, {
+    bool isInitial = false,
+  }) async {
+    try {
+      // Check if we already have this grid cached
+      final cachedOverlay = _gridOverlays[timestamp];
+      final cachedSnapshot = _gridSnapshots[timestamp];
+
+      if (cachedOverlay != null && cachedSnapshot != null) {
+        setState(() {
+          _selectedTimestamp = timestamp;
+          _activeTimelineIndex = _timeline.indexOf(timestamp);
+          _updateActiveOverlay(cachedSnapshot, cachedOverlay);
+          if (isInitial) _isLoading = false;
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Fetch grid data from API
+      final gridData = await _apiClient.fetchGridData(timestamp);
+      if (gridData == null || gridData.gridUrl == null) {
+        setState(() {
+          if (isInitial) _isLoading = false;
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Fetch the actual grid content from blob storage
+      final snapshot = await _apiClient.fetchGridByUrl(
+        gridData.gridUrl!,
+        contoursUrl: gridData.contoursUrl,
+      );
+
+      if (snapshot == null) {
+        setState(() {
+          if (isInitial) _isLoading = false;
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      // Build overlay assets
+      final overlay = await _buildGridOverlay(snapshot);
+      if (overlay == null) {
+        setState(() {
+          if (isInitial) _isLoading = false;
+          _isGridLoading = false;
+        });
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Cache and update UI
+      setState(() {
+        _gridSnapshots[timestamp] = snapshot;
+        _gridOverlays[timestamp] = overlay;
+        _selectedTimestamp = timestamp;
+        _activeTimelineIndex = _timeline.indexOf(timestamp);
+        _updateActiveOverlay(snapshot, overlay);
+        if (isInitial) _isLoading = false;
+        _isGridLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (isInitial) {
+          _errorMessage = 'Failed to load grid data: $e';
+          _isLoading = false;
+        }
+        _isGridLoading = false;
+      });
+    }
   }
 }
 
