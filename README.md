@@ -1,9 +1,6 @@
-# Shizuku Precipitation Viewer
-
-## 🌧️ Try it Live
 <div align="center">
 	<img src="apps/shizuka_viewer/assets/icons/shizuku_logo.svg" alt="Shizuku Logo" width="120"/>
-	<h1>Shizuku Precipitation Viewer</h1>
+	<h1>Shizuku</h1>
 	<p>
 		<a href="https://github.com/02loveslollipop/Shizuku-precipitation-viewer/actions">
 				<img src="https://github.com/02loveslollipop/Shizuku-precipitation-viewer/actions/workflows/ci.yaml/badge.svg" alt="CI Status">
