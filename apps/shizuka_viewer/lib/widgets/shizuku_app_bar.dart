@@ -5,9 +5,10 @@ import '../app_constants.dart';
 import '../localization.dart';
 
 class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShizukuAppBar({super.key, required this.subtitle});
+  const ShizukuAppBar({super.key, required this.subtitle, this.onMenuTap});
 
   final String subtitle;
+  final VoidCallback? onMenuTap;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -17,6 +18,13 @@ class ShizukuAppBar extends StatelessWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final lang = LanguageScope.of(context);
     return AppBar(
+      leading:
+          onMenuTap != null
+              ? IconButton(
+                icon: const Icon(Icons.menu, color: shizukuPrimary),
+                onPressed: onMenuTap,
+              )
+              : null,
       titleSpacing: 0,
       title: Row(
         children: [

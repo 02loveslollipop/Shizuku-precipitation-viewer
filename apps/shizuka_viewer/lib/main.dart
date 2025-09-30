@@ -399,7 +399,13 @@ class _HomePageState extends State<HomePage> {
       _mobileSidebarOpen = false;
     }
     return Scaffold(
-      appBar: ShizukuAppBar(subtitle: t.t('app.subtitle.mapViewer')),
+      appBar: ShizukuAppBar(
+        subtitle: t.t('app.subtitle.mapViewer'),
+        onMenuTap:
+            isMobile
+                ? () => setState(() => _mobileSidebarOpen = !_mobileSidebarOpen)
+                : null,
+      ),
       body:
           _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -437,18 +443,7 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      // Menu button to open sidebar
-                      Positioned(
-                        top: 20,
-                        left: 20,
-                        child: FloatingActionButton.small(
-                          onPressed:
-                              () => setState(
-                                () => _mobileSidebarOpen = !_mobileSidebarOpen,
-                              ),
-                          child: const Icon(Icons.menu),
-                        ),
-                      ),
+                      // AppBar menu button now toggles sidebar; floating button removed
                       // Sidebar overlay
                       if (_mobileSidebarOpen)
                         Positioned.fill(
