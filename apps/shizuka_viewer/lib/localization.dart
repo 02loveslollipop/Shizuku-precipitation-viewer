@@ -138,10 +138,10 @@ class LanguageProvider extends ChangeNotifier {
 
 class LanguageScope extends InheritedNotifier<LanguageProvider> {
   const LanguageScope({
-    required LanguageProvider notifier,
-    required Widget child,
-    Key? key,
-  }) : super(key: key, notifier: notifier, child: child);
+    required LanguageProvider super.notifier,
+    required super.child,
+    super.key,
+  });
 
   static LanguageProvider of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<LanguageScope>();

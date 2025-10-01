@@ -25,8 +25,6 @@ ThemeData buildShizukuTheme() {
       surface: shizukuSurface,
       onSurface: shizukuBackground,
       surfaceTint: shizukuPrimary,
-      background: Colors.white,
-      onBackground: shizukuBackground,
       outline: shizukuSecondary,
       outlineVariant: shizukuSecondary.withOpacity(0.6),
       shadow: Colors.black26,

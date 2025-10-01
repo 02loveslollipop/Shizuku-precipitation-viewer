@@ -402,8 +402,9 @@ class _HomePageState extends State<HomePage> {
     final east = snapshot.east;
     final north = snapshot.north;
 
-    if (lon < west || lon > east || lat < south || lat > north)
+    if (lon < west || lon > east || lat < south || lat > north) {
       return double.nan;
+    }
 
     final xFrac = (lon - west) / (east - west);
     final yFrac = (lat - south) / (north - south);
@@ -826,8 +827,9 @@ class _HomePageState extends State<HomePage> {
                       selectedId != null) {
                     // avoid calling setState during build synchronously; schedule microtask
                     Future.microtask(() {
-                      if (mounted)
+                      if (mounted) {
                         setState(() => _dashboardSelectedSensorId = selectedId);
+                      }
                     });
                   }
 
@@ -1187,13 +1189,13 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           LanguageScope.of(
                             context,
-                          ).t('intensity.' + _intensityKey(cls) + '.label'),
+                          ).t('intensity.${_intensityKey(cls)}.label'),
                           style: theme.textTheme.bodyMedium,
                         ),
                         Text(
                           LanguageScope.of(
                             context,
-                          ).t('intensity.' + _intensityKey(cls) + '.desc'),
+                          ).t('intensity.${_intensityKey(cls)}.desc'),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: shizukuPrimary.withOpacity(0.6),
                           ),
