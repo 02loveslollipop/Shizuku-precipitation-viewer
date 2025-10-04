@@ -2,6 +2,8 @@ module github.com/02loveslollipop/Shizuku-precipitation-viewer
 
 go 1.23
 
+toolchain go1.24.5
+
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/jackc/pgx/v5 v5.5.4
