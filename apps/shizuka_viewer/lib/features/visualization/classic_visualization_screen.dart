@@ -318,23 +318,6 @@ class _ClassicVisualizationScreenState
       ),
     );
   }
-}
-
-    bool isMobile,
-    ThemeData theme,
-    GridProvider gridProvider,
-  ) {
-    if (isMobile) {
-      return Stack(
-        children: [
-          _buildMobileLayout(theme, gridProvider),
-          if (_mobileSidebarOpen) _buildMobileSidebarOverlay(theme),
-        ],
-      );
-    } else {
-      return _buildDesktopLayout(theme, gridProvider);
-    }
-  }
 
   Widget _buildMobileLayout(ThemeData theme, GridProvider gridProvider) {
     return Padding(

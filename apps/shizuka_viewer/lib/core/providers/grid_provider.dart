@@ -56,29 +56,63 @@ class GridProvider with ChangeNotifier {
   
   LatestGrid? get latestGrid => _latestGrid;
   
+  /// Get current grid data for map display
+  GridData? get currentGridData {
+    if (_selectedGrid != null) {
+      return GridData.fromGridTimestamp(_selectedGrid!);
+    }
+    return null;
+  }
+  
+  /// Get list of timestamps for timeline
+  List<DateTime> get timestamps {
+    return _gridTimestamps.map((g) => g.ts).toList();
+  }
+  
   RealtimeMeasurements? get realtimeMeasurements => _realtimeMeasurements;
   bool get loadingRealtime => _loadingRealtime;
   
   /// Get measurements as a list of SensorMeasurementData for map display
+  /// Returns realtime measurements if available, otherwise selected grid measurements
   List<SensorMeasurementData> get measurements {
-    if (_realtimeMeasurements == null) return [];
+    // Realtime mode
+    if (_realtimeMeasurements != null) {
+      return _realtimeMeasurements!.measurements
+          .where((m) => m.sensor != null) // Only include measurements with sensor data
+          .map((realtimeMeasurement) {
+            // Convert RealtimeMeasurement to Measurement format
+            final measurement = Measurement(
+              ts: realtimeMeasurement.ts,
+              valueMm: realtimeMeasurement.valueMm,
+              qcFlags: realtimeMeasurement.qcFlags,
+            );
+            
+            return SensorMeasurementData(
+              sensor: realtimeMeasurement.sensor!,
+              measurement: measurement,
+            );
+          })
+          .toList();
+    }
     
-    return _realtimeMeasurements!.measurements
-        .where((m) => m.sensor != null) // Only include measurements with sensor data
-        .map((realtimeMeasurement) {
-          // Convert RealtimeMeasurement to Measurement format
-          final measurement = Measurement(
-            ts: realtimeMeasurement.ts,
-            sensorId: realtimeMeasurement.sensorId,
-            valueMm: realtimeMeasurement.valueMm,
-          );
-          
-          return SensorMeasurementData(
-            sensor: realtimeMeasurement.sensor!,
-            measurement: measurement,
-          );
-        })
-        .toList();
+    // Grid mode - use selected grid's sensor aggregates
+    if (_selectedGrid != null && _selectedGrid!.sensors != null) {
+      return _selectedGrid!.sensors!
+          .where((sensorAgg) => sensorAgg.sensor != null) // Only include enriched sensors
+          .map((sensorAgg) {
+            final measurement = Measurement(
+              ts: _selectedGrid!.ts,
+              valueMm: sensorAgg.avgMmH, // Use average for grid mode
+            );
+            
+            return SensorMeasurementData(
+              sensor: sensorAgg.sensor!,
+              measurement: measurement,
+            );
+          }).toList();
+    }
+    
+    return [];
   }
 
   /// Load grid timestamps

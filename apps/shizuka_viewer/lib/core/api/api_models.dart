@@ -175,6 +175,9 @@ class SensorAggregate {
   final int measurementCount;
   final double minValueMm;
   final double maxValueMm;
+  
+  // Optional: enriched with sensor info
+  Sensor? sensor;
 
   SensorAggregate({
     required this.sensorId,
@@ -182,6 +185,7 @@ class SensorAggregate {
     required this.measurementCount,
     required this.minValueMm,
     required this.maxValueMm,
+    this.sensor,
   });
 
   factory SensorAggregate.fromJson(Map<String, dynamic> json) {
@@ -271,6 +275,41 @@ class PaginatedGridTimestamps extends PaginatedResponse<GridTimestamp> {
     return PaginatedGridTimestamps(
       timestamps: timestamps,
       pagination: pagination,
+    );
+  }
+}
+
+/// Grid data for map display (compatible with legacy widgets)
+class GridData {
+  final DateTime timestamp;
+  final String? gridUrl;
+  final String? contoursUrl;
+  final List<double>? bounds;
+
+  GridData({
+    required this.timestamp,
+    this.gridUrl,
+    this.contoursUrl,
+    this.bounds,
+  });
+
+  /// Create from GridTimestamp
+  factory GridData.fromGridTimestamp(GridTimestamp grid) {
+    return GridData(
+      timestamp: grid.ts,
+      gridUrl: grid.gridUrl,
+      contoursUrl: grid.contoursUrl,
+      bounds: grid.bounds,
+    );
+  }
+
+  /// Create from LatestGrid
+  factory GridData.fromLatestGrid(LatestGrid grid, {List<double>? bounds}) {
+    return GridData(
+      timestamp: grid.ts,
+      gridUrl: grid.gridUrl,
+      contoursUrl: grid.contoursUrl,
+      bounds: bounds,
     );
   }
 }
