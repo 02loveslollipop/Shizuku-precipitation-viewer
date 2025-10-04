@@ -16,14 +16,80 @@ IMPUTED_FLAG = 2
 POOR_QUALITY_FLAG = 4
 
 
+def _aggregate_10min_windows(sensor_id: str, df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate measurements into 10-minute windows, taking the maximum value.
+    
+    This reduces data bloat by consolidating multiple measurements within
+    each 10-minute period into a single maximum value, which is appropriate
+    for precipitation data where we care about peak intensity.
+    
+    Args:
+        sensor_id: The sensor identifier
+        df: DataFrame with columns: sensor_id, ts, value_mm, quality (optional)
+        
+    Returns:
+        Aggregated DataFrame with one row per 10-minute window
+    """
+    if df.empty:
+        return df
+    
+    # Ensure ts is datetime
+    df = df.copy()
+    df['ts'] = pd.to_datetime(df['ts'], utc=True)
+    df = df.sort_values('ts')
+    
+    # Set ts as index for resampling
+    df_indexed = df.set_index('ts')
+    
+    # Resample to 10-minute windows, taking max value_mm
+    # For quality, take the mean (if present)
+    agg_dict = {'value_mm': 'max'}
+    if 'quality' in df_indexed.columns:
+        agg_dict['quality'] = 'mean'
+    
+    resampled = df_indexed.resample('10T').agg(agg_dict)
+    
+    # Drop windows with no data
+    resampled = resampled.dropna(subset=['value_mm'])
+    
+    if resampled.empty:
+        return pd.DataFrame(columns=['sensor_id', 'ts', 'value_mm', 'quality', 'variable', 'source'])
+    
+    # Reset index to get ts back as column
+    result = resampled.reset_index()
+    result['sensor_id'] = sensor_id
+    
+    # Preserve other columns if they exist (use first value in window)
+    if 'variable' in df.columns:
+        result['variable'] = df['variable'].iloc[0]
+    if 'source' in df.columns:
+        result['source'] = df['source'].iloc[0]
+    
+    logger.debug(
+        "sensor %s: aggregated %d measurements into %d 10-minute windows",
+        sensor_id, len(df), len(result)
+    )
+    
+    return result
+
+
 def clean_measurements(raw_df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
-    """Apply QC + forecasting-based imputation to raw measurements."""
+    """Apply QC + forecasting-based imputation to raw measurements.
+    
+    Aggregates measurements into 10-minute windows, taking the maximum value
+    per sensor to reduce data bloat while maintaining temporal resolution.
+    """
     if raw_df.empty:
         return pd.DataFrame(columns=["sensor_id", "ts", "value_mm", "qc_flags", "imputation_method", "version"])
 
     results = []
     for sensor_id, group in raw_df.groupby("sensor_id"):
-        cleaned = _clean_sensor_dataframe(sensor_id, group, cfg)
+        # First aggregate raw data by 10-minute windows
+        aggregated = _aggregate_10min_windows(sensor_id, group)
+        if aggregated.empty:
+            continue
+        # Then apply cleaning and imputation
+        cleaned = _clean_sensor_dataframe(sensor_id, aggregated, cfg)
         if not cleaned.empty:
             results.append(cleaned)
     if not results:
