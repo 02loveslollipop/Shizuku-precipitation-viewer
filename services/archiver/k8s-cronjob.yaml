@@ -1,0 +1,65 @@
+# Kubernetes CronJob for Data Archiver
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: siata-data-archiver
+  namespace: siata-contamination-viewer
+spec:
+  # Run daily at 2:00 AM UTC
+  schedule: "0 2 * * *"
+  
+  # Keep last 3 successful and 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: data-archiver
+        spec:
+          restartPolicy: OnFailure
+          
+          containers:
+          - name: archiver
+            image: your-registry/siata-archiver:latest
+            
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: connection-url
+            
+            - name: VERCEL_BLOB_RW_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: blob-secrets
+                  key: rw-token
+            
+            - name: VERCEL_BLOB_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: blob-secrets
+                  key: base-url
+            
+            - name: ARCHIVER_RAW_RETENTION_DAYS
+              value: "1"
+            
+            - name: ARCHIVER_CLEAN_RETENTION_DAYS
+              value: "30"
+            
+            - name: ARCHIVER_BATCH_SIZE
+              value: "1000"
+            
+            - name: ARCHIVER_DRY_RUN
+              value: "false"
+            
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"

@@ -1,0 +1,19 @@
+# Docker Compose for testing the archiver service
+version: '3.8'
+
+services:
+  archiver:
+    build:
+      context: ../..
+      dockerfile: services/archiver/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - VERCEL_BLOB_RW_TOKEN=${VERCEL_BLOB_RW_TOKEN}
+      - VERCEL_BLOB_BASE_URL=${VERCEL_BLOB_BASE_URL}
+      - ARCHIVER_RAW_RETENTION_DAYS=${ARCHIVER_RAW_RETENTION_DAYS:-1}
+      - ARCHIVER_CLEAN_RETENTION_DAYS=${ARCHIVER_CLEAN_RETENTION_DAYS:-30}
+      - ARCHIVER_BATCH_SIZE=${ARCHIVER_BATCH_SIZE:-1000}
+      - ARCHIVER_DRY_RUN=${ARCHIVER_DRY_RUN:-false}
+    volumes:
+      - ../../.env:/app/.env:ro
+    restart: "no"
