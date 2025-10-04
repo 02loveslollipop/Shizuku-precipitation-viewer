@@ -86,7 +86,7 @@ def aggregate_sensor_data(
         
         aggregates.append(aggregate)
     
-    logger.info(f"Calculated aggregates for {len(aggregates)} sensors")
+    logger.info("Calculated aggregates for %d sensors", len(aggregates))
     
     return aggregates
 
