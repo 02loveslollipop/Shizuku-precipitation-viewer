@@ -6,6 +6,17 @@ import 'package:flutter/foundation.dart';
 import '../api/api_v1_client.dart';
 import '../api/api_models.dart';
 
+/// Helper class to combine sensor and measurement data
+class SensorMeasurementData {
+  final Sensor sensor;
+  final Measurement measurement;
+
+  SensorMeasurementData({
+    required this.sensor,
+    required this.measurement,
+  });
+}
+
 class GridProvider with ChangeNotifier {
   final ApiV1Client apiClient;
   
@@ -47,6 +58,28 @@ class GridProvider with ChangeNotifier {
   
   RealtimeMeasurements? get realtimeMeasurements => _realtimeMeasurements;
   bool get loadingRealtime => _loadingRealtime;
+  
+  /// Get measurements as a list of SensorMeasurementData for map display
+  List<SensorMeasurementData> get measurements {
+    if (_realtimeMeasurements == null) return [];
+    
+    return _realtimeMeasurements!.measurements
+        .where((m) => m.sensor != null) // Only include measurements with sensor data
+        .map((realtimeMeasurement) {
+          // Convert RealtimeMeasurement to Measurement format
+          final measurement = Measurement(
+            ts: realtimeMeasurement.ts,
+            sensorId: realtimeMeasurement.sensorId,
+            valueMm: realtimeMeasurement.valueMm,
+          );
+          
+          return SensorMeasurementData(
+            sensor: realtimeMeasurement.sensor!,
+            measurement: measurement,
+          );
+        })
+        .toList();
+  }
 
   /// Load grid timestamps
   Future<void> loadGridTimestamps({
