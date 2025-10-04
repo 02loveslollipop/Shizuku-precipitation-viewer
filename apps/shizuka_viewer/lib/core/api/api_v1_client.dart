@@ -1,5 +1,5 @@
 /// API v1 Client
-/// 
+///
 /// HTTP client for new /api/v1 endpoints with error handling,
 /// retry logic, and response caching.
 
@@ -27,7 +27,7 @@ class ApiV1Client {
   final String baseUrl;
   final Duration timeout;
   final int maxRetries;
-  
+
   // Simple in-memory cache
   final Map<String, _CacheEntry> _cache = {};
   final Duration _cacheDuration = const Duration(minutes: 5);
@@ -43,15 +43,9 @@ class ApiV1Client {
   // ============================================================================
 
   /// Get paginated list of sensors
-  Future<PaginatedSensors> getSensors({
-    int page = 1,
-    int limit = 50,
-  }) async {
-    final params = {
-      'page': page.toString(),
-      'limit': limit.toString(),
-    };
-    
+  Future<PaginatedSensors> getSensors({int page = 1, int limit = 50}) async {
+    final params = {'page': page.toString(), 'limit': limit.toString()};
+
     final response = await _get('/api/v1/core/sensors', params: params);
     return PaginatedSensors.fromJson(response);
   }
@@ -74,14 +68,14 @@ class ApiV1Client {
       'clean': clean.toString(),
       'limit': limit.toString(),
     };
-    
+
     if (start != null) {
       params['start'] = start.toIso8601String();
     }
     if (end != null) {
       params['end'] = end.toIso8601String();
     }
-    
+
     final response = await _get(
       '/api/v1/core/sensors/$id/measurements',
       params: params,
@@ -106,14 +100,14 @@ class ApiV1Client {
       'limit': limit.toString(),
       'include_sensors': includeSensors.toString(),
     };
-    
+
     if (start != null) {
       params['start'] = start.toIso8601String();
     }
     if (end != null) {
       params['end'] = end.toIso8601String();
     }
-    
+
     final response = await _get('/api/v1/grid/timestamps', params: params);
     return PaginatedGridTimestamps.fromJson(response);
   }
@@ -124,10 +118,8 @@ class ApiV1Client {
     bool includeSensors = true,
   }) async {
     final timestamp = ts.toIso8601String();
-    final params = {
-      'include_sensors': includeSensors.toString(),
-    };
-    
+    final params = {'include_sensors': includeSensors.toString()};
+
     final response = await _get(
       '/api/v1/grid/timestamps/$timestamp',
       params: params,
@@ -164,7 +156,7 @@ class ApiV1Client {
   }) async {
     final uri = _buildUri(path, params);
     final cacheKey = uri.toString();
-    
+
     // Check cache
     if (useCache && _cache.containsKey(cacheKey)) {
       final entry = _cache[cacheKey]!;
@@ -174,18 +166,18 @@ class ApiV1Client {
         _cache.remove(cacheKey);
       }
     }
-    
+
     // Retry logic
     int attempts = 0;
     Exception? lastException;
-    
+
     while (attempts < maxRetries) {
       try {
         final response = await http.get(uri).timeout(timeout);
-        
+
         if (response.statusCode == 200) {
           final data = json.decode(response.body) as Map<String, dynamic>;
-          
+
           // Cache successful response
           if (useCache) {
             _cache[cacheKey] = _CacheEntry(
@@ -193,7 +185,7 @@ class ApiV1Client {
               timestamp: DateTime.now(),
             );
           }
-          
+
           return data;
         } else if (response.statusCode >= 400 && response.statusCode < 500) {
           // Client errors shouldn't be retried
@@ -217,15 +209,16 @@ class ApiV1Client {
       } catch (e) {
         lastException = ApiException('Unexpected error: $e');
       }
-      
+
       attempts++;
       if (attempts < maxRetries) {
         // Exponential backoff
         await Future.delayed(Duration(milliseconds: 500 * attempts));
       }
     }
-    
-    throw lastException ?? ApiException('Request failed after $maxRetries attempts');
+
+    throw lastException ??
+        ApiException('Request failed after $maxRetries attempts');
   }
 
   Uri _buildUri(String path, Map<String, String>? params) {
@@ -246,7 +239,7 @@ class ApiV1Client {
     final now = DateTime.now();
     int validEntries = 0;
     int expiredEntries = 0;
-    
+
     for (final entry in _cache.values) {
       if (now.difference(entry.timestamp) < _cacheDuration) {
         validEntries++;
@@ -254,7 +247,7 @@ class ApiV1Client {
         expiredEntries++;
       }
     }
-    
+
     return {
       'total_entries': _cache.length,
       'valid_entries': validEntries,
@@ -268,8 +261,5 @@ class _CacheEntry {
   final Map<String, dynamic> data;
   final DateTime timestamp;
 
-  _CacheEntry({
-    required this.data,
-    required this.timestamp,
-  });
+  _CacheEntry({required this.data, required this.timestamp});
 }

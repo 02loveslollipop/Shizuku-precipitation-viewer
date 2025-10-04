@@ -1,5 +1,5 @@
 /// API v1 Response Models
-/// 
+///
 /// These models match the new /api/v1 endpoint structure.
 
 // ============================================================================
@@ -33,10 +33,7 @@ class PaginatedResponse<T> {
   final List<T> data;
   final Pagination pagination;
 
-  PaginatedResponse({
-    required this.data,
-    required this.pagination,
-  });
+  PaginatedResponse({required this.data, required this.pagination});
 }
 
 // ============================================================================
@@ -79,9 +76,10 @@ class Sensor {
       providerId: json['provider_id'] as String?,
       lat: (json['lat'] as num).toDouble(),
       lon: (json['lon'] as num).toDouble(),
-      elevationM: json['elevation_m'] != null 
-          ? (json['elevation_m'] as num).toDouble() 
-          : null,
+      elevationM:
+          json['elevation_m'] != null
+              ? (json['elevation_m'] as num).toDouble()
+              : null,
       city: json['city'] as String?,
       subbasin: json['subbasin'] as String?,
       barrio: json['barrio'] as String?,
@@ -100,13 +98,15 @@ class PaginatedSensors extends PaginatedResponse<Sensor> {
 
   factory PaginatedSensors.fromJson(Map<String, dynamic> json) {
     final sensorsJson = json['sensors'] as List<dynamic>;
-    final sensors = sensorsJson.map((s) => Sensor.fromJson(s as Map<String, dynamic>)).toList();
-    final pagination = Pagination.fromJson(json['pagination'] as Map<String, dynamic>);
-    
-    return PaginatedSensors(
-      sensors: sensors,
-      pagination: pagination,
+    final sensors =
+        sensorsJson
+            .map((s) => Sensor.fromJson(s as Map<String, dynamic>))
+            .toList();
+    final pagination = Pagination.fromJson(
+      json['pagination'] as Map<String, dynamic>,
     );
+
+    return PaginatedSensors(sensors: sensors, pagination: pagination);
   }
 }
 
@@ -152,10 +152,11 @@ class SensorMeasurements {
 
   factory SensorMeasurements.fromJson(Map<String, dynamic> json) {
     final measurementsJson = json['measurements'] as List<dynamic>;
-    final measurements = measurementsJson
-        .map((m) => Measurement.fromJson(m as Map<String, dynamic>))
-        .toList();
-    
+    final measurements =
+        measurementsJson
+            .map((m) => Measurement.fromJson(m as Map<String, dynamic>))
+            .toList();
+
     return SensorMeasurements(
       sensorId: json['sensor_id'] as String,
       clean: json['clean'] as bool,
@@ -175,7 +176,7 @@ class SensorAggregate {
   final int measurementCount;
   final double minValueMm;
   final double maxValueMm;
-  
+
   // Optional: enriched with sensor info
   Sensor? sensor;
 
@@ -229,16 +230,18 @@ class GridTimestamp {
   factory GridTimestamp.fromJson(Map<String, dynamic> json) {
     List<double>? bounds;
     if (json['bounds'] != null) {
-      bounds = (json['bounds'] as List<dynamic>)
-          .map((b) => (b as num).toDouble())
-          .toList();
+      bounds =
+          (json['bounds'] as List<dynamic>)
+              .map((b) => (b as num).toDouble())
+              .toList();
     }
 
     List<SensorAggregate>? sensors;
     if (json['sensors'] != null) {
-      sensors = (json['sensors'] as List<dynamic>)
-          .map((s) => SensorAggregate.fromJson(s as Map<String, dynamic>))
-          .toList();
+      sensors =
+          (json['sensors'] as List<dynamic>)
+              .map((s) => SensorAggregate.fromJson(s as Map<String, dynamic>))
+              .toList();
     }
 
     return GridTimestamp(
@@ -251,9 +254,10 @@ class GridTimestamp {
       gridUrl: json['grid_url'] as String?,
       npzUrl: json['npz_url'] as String?,
       contoursUrl: json['contours_url'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String).toUtc()
-          : null,
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'] as String).toUtc()
+              : null,
       sensors: sensors,
     );
   }
@@ -267,11 +271,14 @@ class PaginatedGridTimestamps extends PaginatedResponse<GridTimestamp> {
 
   factory PaginatedGridTimestamps.fromJson(Map<String, dynamic> json) {
     final timestampsJson = json['timestamps'] as List<dynamic>;
-    final timestamps = timestampsJson
-        .map((t) => GridTimestamp.fromJson(t as Map<String, dynamic>))
-        .toList();
-    final pagination = Pagination.fromJson(json['pagination'] as Map<String, dynamic>);
-    
+    final timestamps =
+        timestampsJson
+            .map((t) => GridTimestamp.fromJson(t as Map<String, dynamic>))
+            .toList();
+    final pagination = Pagination.fromJson(
+      json['pagination'] as Map<String, dynamic>,
+    );
+
     return PaginatedGridTimestamps(
       timestamps: timestamps,
       pagination: pagination,
@@ -331,7 +338,7 @@ class LatestGrid {
     // Parse from /api/v1/realtime/now response structure
     final data = json['data'] as Map<String, dynamic>;
     final grid = data['grid'] as Map<String, dynamic>;
-    
+
     return LatestGrid(
       ts: DateTime.parse(grid['timestamp'] as String).toUtc(),
       gridRunId: grid['id'] as int,
@@ -350,7 +357,7 @@ class RealtimeMeasurement {
   final DateTime ts;
   final double valueMm;
   final int? qcFlags;
-  
+
   // Optional: enriched with sensor info
   Sensor? sensor;
 
@@ -368,7 +375,7 @@ class RealtimeMeasurement {
   }) {
     // Handle both individual measurement format and sensor aggregate format
     final sensorId = json['sensor_id'] as String;
-    
+
     // Parse timestamp - use provided timestamp or parse from json
     DateTime ts;
     if (timestamp != null) {
@@ -379,7 +386,7 @@ class RealtimeMeasurement {
       // Fallback to current time
       ts = DateTime.now().toUtc();
     }
-    
+
     // Parse value - support both value_mm and avg_mm_h
     double valueMm;
     if (json.containsKey('value_mm')) {
@@ -389,13 +396,13 @@ class RealtimeMeasurement {
     } else {
       valueMm = 0.0;
     }
-    
+
     // Parse enriched sensor info if available
     Sensor? sensor;
     if (json['sensor'] != null) {
       sensor = Sensor.fromJson(json['sensor'] as Map<String, dynamic>);
     }
-    
+
     return RealtimeMeasurement(
       sensorId: sensorId,
       ts: ts,
@@ -410,27 +417,28 @@ class RealtimeMeasurements {
   final DateTime timestamp;
   final List<RealtimeMeasurement> measurements;
 
-  RealtimeMeasurements({
-    required this.timestamp,
-    required this.measurements,
-  });
+  RealtimeMeasurements({required this.timestamp, required this.measurements});
 
   factory RealtimeMeasurements.fromJson(Map<String, dynamic> json) {
     // Parse from /api/v1/realtime/now response structure
     final data = json['data'] as Map<String, dynamic>;
     final grid = data['grid'] as Map<String, dynamic>;
-    
+
     // Use grid timestamp as the reference timestamp
     final gridTimestamp = DateTime.parse(grid['timestamp'] as String).toUtc();
-    
+
     final aggregatesJson = data['sensor_aggregates'] as List<dynamic>?;
-    final measurements = aggregatesJson
-        ?.map((m) => RealtimeMeasurement.fromJson(
-              m as Map<String, dynamic>,
-              timestamp: gridTimestamp,
-            ))
-        .toList() ?? [];
-    
+    final measurements =
+        aggregatesJson
+            ?.map(
+              (m) => RealtimeMeasurement.fromJson(
+                m as Map<String, dynamic>,
+                timestamp: gridTimestamp,
+              ),
+            )
+            .toList() ??
+        [];
+
     return RealtimeMeasurements(
       timestamp: gridTimestamp,
       measurements: measurements,
@@ -466,10 +474,7 @@ class TimeSeriesData {
   final DateTime timestamp;
   final double value;
 
-  TimeSeriesData({
-    required this.timestamp,
-    required this.value,
-  });
+  TimeSeriesData({required this.timestamp, required this.value});
 }
 
 class SensorStats {
