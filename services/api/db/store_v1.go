@@ -44,7 +44,7 @@ func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, off
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	countSQL := "SELECT COUNT(*) FROM grid_runs g " + whereClause
+	countSQL := "SELECT COUNT(*) FROM shizuku.grid_runs g " + whereClause
 	var totalCount int
 	if err := s.pool.QueryRow(ctx, countSQL, args...).Scan(&totalCount); err != nil {
 		return nil, err
@@ -58,8 +58,8 @@ func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, off
 	query.WriteString("SELECT g.id, g.ts, g.res_m, g.status, g.blob_url_json, g.blob_url_contours, ")
 	query.WriteString("COALESCE(COUNT(gsa.sensor_id), 0) AS sensor_count, AVG(gsa.avg_mm_h) AS avg_rainfall, ")
 	query.WriteString("MAX(gsa.avg_mm_h) AS max_rainfall, g.created_at ")
-	query.WriteString("FROM grid_runs g ")
-	query.WriteString("LEFT JOIN grid_sensor_aggregates gsa ON gsa.grid_run_id = g.id ")
+	query.WriteString("FROM shizuku.grid_runs g ")
+	query.WriteString("LEFT JOIN shizuku.grid_sensor_aggregates gsa ON gsa.grid_run_id = g.id ")
 	query.WriteString(whereClause + " ")
 	query.WriteString("GROUP BY g.id, g.ts, g.res_m, g.status, g.blob_url_json, g.blob_url_contours, g.created_at ")
 	query.WriteString("ORDER BY g.ts DESC ")
@@ -117,7 +117,7 @@ func (s *Store) GetGridRunByTimestamp(ctx context.Context, timestamp time.Time) 
 		SELECT id, ts, res_m, bbox, crs,
 		       blob_url_json, blob_url_contours,
 		       status, message, created_at, updated_at
-		FROM grid_runs
+		FROM shizuku.grid_runs
 		WHERE ts = $1 AND status = 'done'
 		LIMIT 1
 	`
@@ -168,9 +168,9 @@ func (s *Store) GetSensorAggregatesByTimestamp(ctx context.Context, timestamp ti
 		       gsa.avg_mm_h,
 		       gsa.measurement_count,
 		       gsa.created_at
-		FROM grid_sensor_aggregates gsa
-		JOIN grid_runs g ON g.id = gsa.grid_run_id
-		JOIN sensors s ON s.id = gsa.sensor_id
+		FROM shizuku.grid_sensor_aggregates gsa
+		JOIN shizuku.grid_runs g ON g.id = gsa.grid_run_id
+		JOIN shizuku.sensors s ON s.id = gsa.sensor_id
 		WHERE g.ts = $1 AND g.status = 'done'
 		ORDER BY gsa.avg_mm_h DESC
 	`
@@ -210,8 +210,8 @@ func (s *Store) GetSensorAggregatesByGridRunID(ctx context.Context, gridRunID in
 		       gsa.avg_mm_h,
 		       gsa.measurement_count,
 		       gsa.created_at
-		FROM grid_sensor_aggregates gsa
-		JOIN sensors s ON s.id = gsa.sensor_id
+		FROM shizuku.grid_sensor_aggregates gsa
+		JOIN shizuku.sensors s ON s.id = gsa.sensor_id
 		WHERE gsa.grid_run_id = $1
 		ORDER BY gsa.avg_mm_h DESC
 	`
@@ -247,7 +247,7 @@ func (s *Store) GetLatestGrid(ctx context.Context) (*GridRun, error) {
 		SELECT id, ts, res_m, bbox, crs,
 		       blob_url_json, blob_url_contours,
 		       status, message, created_at, updated_at
-		FROM grid_runs
+		FROM shizuku.grid_runs
 		WHERE status = 'done'
 		ORDER BY ts DESC
 		LIMIT 1
@@ -283,7 +283,7 @@ func (s *Store) GetLatestGrid(ctx context.Context) (*GridRun, error) {
 func (s *Store) GetSensor(ctx context.Context, sensorID string) (*Sensor, error) {
 	query := `
 		SELECT id, name, provider_id, lat, lon, city, subbasin, barrio, metadata, created_at, updated_at
-		FROM sensors
+		FROM shizuku.sensors
 		WHERE id = $1
 	`
 

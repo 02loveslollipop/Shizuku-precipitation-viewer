@@ -47,7 +47,7 @@ type Sensor struct {
 
 const listSensorsSQL = `
     SELECT id, name, provider_id, lat, lon, city, subbasin, barrio, metadata, created_at, updated_at
-    FROM sensors
+    FROM shizuku.sensors
     ORDER BY id
 `
 
@@ -104,13 +104,13 @@ type MeasurementQuery struct {
 
 const cleanMeasurementsBase = `
     SELECT sensor_id, ts, value_mm, qc_flags, imputation_method, NULL::double precision AS quality, NULL::text AS source
-    FROM clean_measurements
+    FROM shizuku.clean_measurements
     WHERE sensor_id = $1
 `
 
 const rawMeasurementsBase = `
     SELECT sensor_id, ts, value_mm, NULL::integer AS qc_flags, NULL::text AS imputation_method, quality, source
-    FROM raw_measurements
+    FROM shizuku.raw_measurements
     WHERE sensor_id = $1
 `
 
@@ -209,7 +209,7 @@ type GridInfo struct {
 
 const availableGridsSQL = `
 	SELECT ts
-	FROM grid_runs
+	FROM shizuku.grid_runs
 	WHERE status = 'done'
 	ORDER BY ts ASC
 `
@@ -235,7 +235,7 @@ func (s *Store) GetAvailableGridTimestamps(ctx context.Context) ([]time.Time, er
 
 const gridByTimestampSQL = `
     SELECT id, ts, res_m, bbox, crs, blob_url_json, blob_url_contours, status, message, created_at, updated_at
-    FROM grid_runs
+    FROM shizuku.grid_runs
     WHERE ts = $1 AND status = 'done'
     LIMIT 1
 `
@@ -304,7 +304,7 @@ func (s *Store) SnapshotAtTimestamp(ctx context.Context, ts time.Time, useClean 
 		// clean measurements don't have quality/source in schema; return NULLs for those
 		sub = `(
 			SELECT sensor_id, ts, value_mm, qc_flags, imputation_method, NULL::double precision AS quality, NULL::text AS source
-			FROM clean_measurements
+			FROM shizuku.clean_measurements
 			WHERE sensor_id = sensors.id AND ts <= $1
 			ORDER BY ts DESC
 			LIMIT 1
@@ -312,7 +312,7 @@ func (s *Store) SnapshotAtTimestamp(ctx context.Context, ts time.Time, useClean 
 	} else {
 		sub = `(
 			SELECT sensor_id, ts, value_mm, NULL::integer AS qc_flags, NULL::text AS imputation_method, quality, source
-			FROM raw_measurements
+			FROM shizuku.raw_measurements
 			WHERE sensor_id = sensors.id AND ts <= $1
 			ORDER BY ts DESC
 			LIMIT 1
@@ -321,7 +321,7 @@ func (s *Store) SnapshotAtTimestamp(ctx context.Context, ts time.Time, useClean 
 
 	sql := `SELECT sensors.id, sensors.name, sensors.provider_id, sensors.lat, sensors.lon, sensors.city,
 		m.ts, m.value_mm, m.qc_flags, m.imputation_method, m.quality, m.source
-		FROM sensors
+		FROM shizuku.sensors
 		LEFT JOIN LATERAL ` + sub + ` m ON true
 		ORDER BY sensors.id`
 
@@ -381,10 +381,10 @@ type AveragesResult struct {
 
 const averagesSQL = `
 SELECT
-  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '3 hours') AS avg_3h,
-  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '6 hours') AS avg_6h,
-  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '12 hours') AS avg_12h,
-  (SELECT AVG(value_mm) FROM clean_measurements WHERE ts >= now() - interval '24 hours') AS avg_24h
+  (SELECT AVG(value_mm) FROM shizuku.clean_measurements WHERE ts >= now() - interval '3 hours') AS avg_3h,
+  (SELECT AVG(value_mm) FROM shizuku.clean_measurements WHERE ts >= now() - interval '6 hours') AS avg_6h,
+  (SELECT AVG(value_mm) FROM shizuku.clean_measurements WHERE ts >= now() - interval '12 hours') AS avg_12h,
+  (SELECT AVG(value_mm) FROM shizuku.clean_measurements WHERE ts >= now() - interval '24 hours') AS avg_24h
 `
 
 // GetAverages computes average precipitation (value_mm) across all sensors

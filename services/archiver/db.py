@@ -59,7 +59,7 @@ class ArchiveDatabase:
             # Count only, don't delete
             with self.conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*) as count FROM raw_measurements WHERE ts < %s",
+                    "SELECT COUNT(*) as count FROM shizuku.raw_measurements WHERE ts < %s",
                     (cutoff_date,)
                 )
                 count = cur.fetchone()["count"]
@@ -68,7 +68,7 @@ class ArchiveDatabase:
         
         with self.conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM raw_measurements WHERE ts < %s",
+                "DELETE FROM shizuku.raw_measurements WHERE ts < %s",
                 (cutoff_date,)
             )
             deleted = cur.rowcount
@@ -104,7 +104,7 @@ class ArchiveDatabase:
                     value_mm,
                     qc_flags,
                     imputation_method
-                FROM clean_measurements
+                FROM shizuku.clean_measurements
                 WHERE ts >= %s AND ts < %s
                 ORDER BY ts, sensor_id
                 LIMIT %s OFFSET %s
@@ -129,7 +129,7 @@ class ArchiveDatabase:
                 SELECT 
                     MIN(ts) as min_ts,
                     MAX(ts) as max_ts
-                FROM clean_measurements
+                FROM shizuku.clean_measurements
                 WHERE ts < %s
                 """,
                 (cutoff_date,)
@@ -157,7 +157,7 @@ class ArchiveDatabase:
         if self.cfg.dry_run:
             with self.conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*) as count FROM clean_measurements WHERE ts >= %s AND ts < %s",
+                    "SELECT COUNT(*) as count FROM shizuku.clean_measurements WHERE ts >= %s AND ts < %s",
                     (start_date, end_date)
                 )
                 count = cur.fetchone()["count"]
@@ -166,7 +166,7 @@ class ArchiveDatabase:
         
         with self.conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM clean_measurements WHERE ts >= %s AND ts < %s",
+                "DELETE FROM shizuku.clean_measurements WHERE ts >= %s AND ts < %s",
                 (start_date, end_date)
             )
             deleted = cur.rowcount
@@ -178,7 +178,7 @@ class ArchiveDatabase:
         """Count how many clean measurements need to be archived"""
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT COUNT(*) as count FROM clean_measurements WHERE ts < %s",
+                "SELECT COUNT(*) as count FROM shizuku.clean_measurements WHERE ts < %s",
                 (cutoff_date,)
             )
             return cur.fetchone()["count"]

@@ -15,8 +15,8 @@ SELECT rm.sensor_id,
        rm.quality,
        rm.variable,
        rm.source
-FROM raw_measurements rm
-LEFT JOIN clean_measurements cm
+FROM shizuku.raw_measurements rm
+LEFT JOIN shizuku.clean_measurements cm
   ON cm.sensor_id = rm.sensor_id
  AND cm.ts = rm.ts
  AND cm.version = 1
@@ -33,8 +33,8 @@ SELECT rm.sensor_id,
        rm.quality,
        rm.variable,
        rm.source
-FROM raw_measurements rm
-LEFT JOIN clean_measurements cm
+FROM shizuku.raw_measurements rm
+LEFT JOIN shizuku.clean_measurements cm
   ON cm.sensor_id = rm.sensor_id
  AND cm.ts = rm.ts
  AND cm.version = 1
@@ -47,7 +47,7 @@ ORDER BY rm.sensor_id, rm.ts
 
 BOUNDS_QUERY = """
 SELECT MIN(ts) AS min_ts, MAX(ts) AS max_ts
-FROM raw_measurements
+FROM shizuku.raw_measurements
 WHERE variable = 'precipitacion'
 """
 
@@ -60,6 +60,7 @@ class Database:
             "clean_measurements",
             self._metadata,
             autoload_with=self.engine,
+            schema="shizuku",
         )
 
     def fetch_raw_measurements(self, since: datetime) -> pd.DataFrame:

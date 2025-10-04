@@ -10,14 +10,14 @@ from .config import Config
 
 GRID_RUN_INSERT_SQL = sa.text(
     """
-    INSERT INTO grid_runs (ts, res_m, bbox, crs, status, created_at, updated_at)
+    INSERT INTO shizuku.grid_runs (ts, res_m, bbox, crs, status, created_at, updated_at)
     SELECT slot, :res_m, '[]'::jsonb, 'EPSG:3857', 'pending', NOW(), NOW()
     FROM (
         SELECT DISTINCT date_trunc(:interval_unit, ts) AS slot
-        FROM clean_measurements
+        FROM shizuku.clean_measurements
         WHERE ts >= NOW() - (:backfill_hours || ' hours')::interval
     ) AS slots
-    LEFT JOIN grid_runs gr ON gr.ts = slots.slot AND gr.res_m = :res_m
+    LEFT JOIN shizuku.grid_runs gr ON gr.ts = slots.slot AND gr.res_m = :res_m
     WHERE gr.id IS NULL
     ORDER BY slot
     LIMIT :limit
@@ -27,7 +27,7 @@ GRID_RUN_INSERT_SQL = sa.text(
 PENDING_SLOTS_SQL = sa.text(
     """
     SELECT id, ts, res_m
-    FROM grid_runs
+    FROM shizuku.grid_runs
     WHERE status = 'pending'
     ORDER BY ts DESC
     LIMIT :limit
@@ -36,7 +36,7 @@ PENDING_SLOTS_SQL = sa.text(
 
 UPDATE_STATUS_SQL = sa.text(
     """
-    UPDATE grid_runs
+    UPDATE shizuku.grid_runs
     SET status = :status,
         blob_url_json = :json_url,
         blob_url_contours = :contours_url,
@@ -49,7 +49,7 @@ UPDATE_STATUS_SQL = sa.text(
 
 INSERT_AGGREGATES_SQL = sa.text(
     """
-    INSERT INTO grid_sensor_aggregates 
+    INSERT INTO shizuku.grid_sensor_aggregates 
         (grid_run_id, sensor_id, ts_start, ts_end, avg_mm_h, 
          measurement_count, min_value_mm, max_value_mm)
     VALUES 
@@ -67,7 +67,7 @@ INSERT_AGGREGATES_SQL = sa.text(
 
 FAIL_STATUS_SQL = sa.text(
     """
-    UPDATE grid_runs
+    UPDATE shizuku.grid_runs
     SET status = 'failed', message = :message, updated_at = NOW()
     WHERE id = :id
     """
@@ -81,8 +81,8 @@ SNAPSHOT_QUERY = sa.text(
            cm.imputation_method,
            s.lat,
            s.lon
-    FROM clean_measurements cm
-    JOIN sensors s ON s.id = cm.sensor_id
+    FROM shizuku.clean_measurements cm
+    JOIN shizuku.sensors s ON s.id = cm.sensor_id
     WHERE cm.ts >= :start AND cm.ts < :end
     ORDER BY cm.sensor_id
     """
