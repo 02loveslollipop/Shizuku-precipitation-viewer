@@ -1,11 +1,12 @@
 /// Classic Visualization Screen - Matches original UI design
-/// 
+///
 /// Orchestrates modular components while maintaining exact original UI
 /// Uses v1 API via providers
 
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/providers/grid_provider.dart';
 import '../../core/providers/dashboard_provider.dart';
@@ -42,10 +43,6 @@ class _ClassicVisualizationScreenState
   int _activeTimelineIndex = 0;
   Timer? _debounceTimer;
 
-  // Dashboard state
-  String? _dashboardSelectedSensorId;
-  int _dashboardSeriesIndex = 0;
-
   Timer? _refreshTimer;
 
   @override
@@ -71,7 +68,9 @@ class _ClassicVisualizationScreenState
       await gridProvider.loadGridTimestamps();
       await gridProvider.loadLatestGrid();
     } else if (_currentMode == VisualizationMode.dashboard) {
-      await context.read<DashboardProvider>().loadSummary();
+      final dashProvider = context.read<DashboardProvider>();
+      await dashProvider.loadSensors();
+      await dashProvider.loadStats(period: TimePeriod.hours24);
     }
   }
 
@@ -115,10 +114,6 @@ class _ClassicVisualizationScreenState
         _showHeatmap = true;
         _showContours = true;
       }
-
-      if (newMode == VisualizationMode.dashboard) {
-        _dashboardSelectedSensorId = null;
-      }
     });
 
     _updateRefreshTimer();
@@ -135,8 +130,7 @@ class _ClassicVisualizationScreenState
       final gridProvider = context.read<GridProvider>();
       if (gridProvider.timestamps.isNotEmpty &&
           index < gridProvider.timestamps.length) {
-        final timestamp = gridProvider.timestamps[index];
-        gridProvider.loadGridForTimestamp(timestamp);
+        gridProvider.selectGridByIndex(index);
       }
     });
   }
@@ -249,24 +243,15 @@ class _ClassicVisualizationScreenState
   Widget _buildDashboard() {
     return Consumer<DashboardProvider>(
       builder: (context, dashProvider, child) {
-        return DashboardScreen(
-          selectedSensorId: _dashboardSelectedSensorId,
-          seriesIndex: _dashboardSeriesIndex,
-          onSensorSelected: (id) {
-            setState(() {
-              _dashboardSelectedSensorId = id;
-              _dashboardSeriesIndex = 0;
-            });
-          },
-          onSeriesIndexChanged: (index) {
-            setState(() => _dashboardSeriesIndex = index);
-          },
-        );
+        return const DashboardScreen();
       },
     );
   }
 
-  Future<void> _showSensorDetails(Sensor sensor, Measurement measurement) async {
+  Future<void> _showSensorDetails(
+    Sensor sensor,
+    Measurement measurement,
+  ) async {
     final gridProvider = context.read<GridProvider>();
 
     final sensorMeasurement = SensorMeasurement.fromV1(
@@ -282,207 +267,16 @@ class _ClassicVisualizationScreenState
 
     if (!mounted) return;
 
-    final history = measurements.measurements
-        .map((m) => SeriesPoint.fromV1(m))
-        .toList();
+    final history =
+        measurements.measurements.map((m) => SeriesPoint.fromV1(m)).toList();
 
     showModalBottomSheet(
       context: context,
-      builder: (context) => SensorDetailSheet(
-        measurement: sensorMeasurement,
-        history: history,
-      ),
-    );
-  }
-
-  Widget _buildError(ThemeData theme, String errorMessage) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              errorMessage,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _loadInitialData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout(ThemeData theme, GridProvider gridProvider) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: _buildMainView(gridProvider),
-              ),
-            ),
+      builder:
+          (context) => SensorDetailSheet(
+            measurement: sensorMeasurement,
+            history: history,
           ),
-          if (_currentMode != VisualizationMode.realtime) ...[
-            const SizedBox(height: 16),
-            _buildTimelinePanel(theme, gridProvider),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopLayout(ThemeData theme, GridProvider gridProvider) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSidebar(theme),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: _buildMainView(gridProvider),
-                    ),
-                  ),
-                ),
-                if (_currentMode != VisualizationMode.realtime) ...[
-                  const SizedBox(height: 16),
-                  _buildTimelinePanel(theme, gridProvider),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileSidebarOverlay(ThemeData theme) {
-    return Positioned.fill(
-      child: Row(
-        children: [
-          SizedBox(
-            width: 260,
-            child: Material(
-              elevation: 8,
-              child: SafeArea(child: _buildSidebar(theme)),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _mobileSidebarOpen = false),
-              child: Container(
-                color: Colors.black.withOpacity(0.35),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMainView(GridProvider gridProvider) {
-    if (_currentMode == VisualizationMode.dashboard) {
-      return _buildDashboard();
-    } else if (_currentMode == VisualizationMode.realtime) {
-      return RealtimeMapWidget(
-        showPins: _showPins,
-        onSensorTap: _showSensorDetails,
-      );
-    } else {
-      return HeatmapWidget(
-        showPins: _showPins,
-        showHeatmap: _showHeatmap,
-        showContours: _showContours,
-        onSensorTap: _showSensorDetails,
-      );
-    }
-  }
-
-  Widget _buildDashboard() {
-    return Consumer<DashboardProvider>(
-      builder: (context, dashProvider, child) {
-        return DashboardScreen(
-          selectedSensorId: _dashboardSelectedSensorId,
-          seriesIndex: _dashboardSeriesIndex,
-          onSensorSelected: (id) {
-            setState(() {
-              _dashboardSelectedSensorId = id;
-              _dashboardSeriesIndex = 0;
-            });
-          },
-          onSeriesIndexChanged: (index) {
-            setState(() => _dashboardSeriesIndex = index);
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showSensorDetails(Sensor sensor, Measurement measurement) async {
-    final gridProvider = context.read<GridProvider>();
-    
-    // Convert to presentation model
-    final sensorMeasurement = SensorMeasurement.fromV1(
-      sensor: sensor,
-      measurement: measurement,
-    );
-
-    // Fetch history
-    final measurements = await gridProvider.apiClient.getSensorMeasurements(
-      sensor.id,
-      clean: true,
-      limit: 100,
-    );
-
-    if (!mounted) return;
-
-    final history = measurements.measurements
-        .map((m) => SeriesPoint.fromV1(m))
-        .toList();
-
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SensorDetailSheet(
-        measurement: sensorMeasurement,
-        history: history,
-      ),
     );
   }
 
@@ -512,7 +306,7 @@ class _ClassicVisualizationScreenState
 
   Widget _buildSidebar(ThemeData theme) {
     final t = LanguageScope.of(context);
-    
+
     return Container(
       width: 260,
       decoration: const BoxDecoration(
@@ -525,10 +319,7 @@ class _ClassicVisualizationScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                t.t('overlays.title'),
-                style: theme.textTheme.titleMedium,
-              ),
+              Text(t.t('overlays.title'), style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               if (_currentMode == VisualizationMode.realtime) ...[
                 _buildToggle(
@@ -660,10 +451,7 @@ class _ClassicVisualizationScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            t.t('precipitation.scale'),
-            style: theme.textTheme.titleMedium,
-          ),
+          Text(t.t('precipitation.scale'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Container(
             height: 16,
@@ -760,10 +548,7 @@ class _ClassicVisualizationScreenState
           ],
         ),
         child: Center(
-          child: Text(
-            t.t('timeline.empty'),
-            style: theme.textTheme.bodyMedium,
-          ),
+          child: Text(t.t('timeline.empty'), style: theme.textTheme.bodyMedium),
         ),
       );
     }
@@ -796,10 +581,7 @@ class _ClassicVisualizationScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                t.t('map.timeline'),
-                style: theme.textTheme.titleMedium,
-              ),
+              Text(t.t('map.timeline'), style: theme.textTheme.titleMedium),
               Row(
                 children: [
                   if (isLive) ...[

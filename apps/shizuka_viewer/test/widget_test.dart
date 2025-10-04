@@ -9,11 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 // ignore: avoid_relative_lib_imports
 import '../lib/main.dart';
+// ignore: avoid_relative_lib_imports
+import '../lib/localization.dart';
 
 void main() {
   testWidgets('App builds without crashing', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const ShizukuViewerApp());
+    final lang = LanguageProvider();
+    await tester.pumpWidget(ShizukuViewerApp(language: lang));
 
     // Just verify that the app builds without throwing an exception
     expect(find.byType(ShizukuViewerApp), findsOneWidget);
