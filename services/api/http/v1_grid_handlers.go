@@ -48,11 +48,17 @@ func (s *Server) handleV1GridTimestamps(c *gin.Context) {
 		}
 	}
 
+	// Parse include_sensors parameter (defaults to false for performance)
+	includeSensors := false
+	if inc := c.Query("include_sensors"); inc == "true" {
+		includeSensors = true
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 
 	// Get paginated grid runs with aggregates
-	result, err := s.store.ListGridTimestampsWithAggregates(ctx, limit, offset, startTime, endTime)
+	result, err := s.store.ListGridTimestampsWithAggregates(ctx, limit, offset, startTime, endTime, includeSensors)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

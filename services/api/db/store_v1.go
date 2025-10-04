@@ -8,17 +8,28 @@ import (
 	"time"
 )
 
+// SensorAggregate represents aggregated sensor data for a grid run
+type SensorAggregate struct {
+	SensorID         string   `json:"sensor_id"`
+	AvgMmH           float64  `json:"avg_mm_h"`
+	MeasurementCount int      `json:"measurement_count"`
+	MinValueMm       float64  `json:"min_value_mm"`
+	MaxValueMm       float64  `json:"max_value_mm"`
+	Sensor           *Sensor  `json:"sensor,omitempty"` // Optional enrichment
+}
+
 type GridTimestampResult struct {
-	ID             int       `json:"id"`
-	Timestamp      time.Time `json:"timestamp"`
-	Resolution     int       `json:"resolution"`
-	Status         string    `json:"status"`
-	GridJSONURL    *string   `json:"grid_json_url,omitempty"`
-	ContoursURL    *string   `json:"contours_url,omitempty"`
-	SensorCount    int       `json:"sensor_count"`
-	AvgRainfallMmH *float64  `json:"avg_rainfall_mm_h,omitempty"`
-	MaxRainfallMmH *float64  `json:"max_rainfall_mm_h,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             int                `json:"id"`
+	Timestamp      time.Time          `json:"timestamp"`
+	Resolution     int                `json:"resolution"`
+	Status         string             `json:"status"`
+	GridJSONURL    *string            `json:"grid_json_url,omitempty"`
+	ContoursURL    *string            `json:"contours_url,omitempty"`
+	SensorCount    int                `json:"sensor_count"`
+	AvgRainfallMmH *float64           `json:"avg_rainfall_mm_h,omitempty"`
+	MaxRainfallMmH *float64           `json:"max_rainfall_mm_h,omitempty"`
+	CreatedAt      time.Time          `json:"created_at"`
+	Sensors        []SensorAggregate  `json:"sensors,omitempty"` // Optional enrichment
 }
 
 type GridTimestampsPage struct {
@@ -26,7 +37,7 @@ type GridTimestampsPage struct {
 	TotalCount int                   `json:"total_count"`
 }
 
-func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, offset int, startTime, endTime *time.Time) (*GridTimestampsPage, error) {
+func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, offset int, startTime, endTime *time.Time, includeSensors bool) (*GridTimestampsPage, error) {
 	conditions := []string{"g.status = 'done'"}
 	args := []any{}
 
@@ -72,6 +83,8 @@ func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, off
 	defer rows.Close()
 
 	grids := make([]GridTimestampResult, 0, limit)
+	gridIDs := make([]int, 0, limit)
+	
 	for rows.Next() {
 		var g GridTimestampResult
 		if err := rows.Scan(
@@ -89,13 +102,87 @@ func (s *Store) ListGridTimestampsWithAggregates(ctx context.Context, limit, off
 			return nil, err
 		}
 		grids = append(grids, g)
+		gridIDs = append(gridIDs, g.ID)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
+	// If sensor enrichment is requested, fetch sensor aggregates with sensor details
+	if includeSensors && len(gridIDs) > 0 {
+		if err := s.enrichGridsWithSensors(ctx, grids, gridIDs); err != nil {
+			return nil, err
+		}
+	}
+
 	return &GridTimestampsPage{Grids: grids, TotalCount: totalCount}, nil
+}
+
+// enrichGridsWithSensors fetches sensor aggregates and enriches them with sensor metadata
+func (s *Store) enrichGridsWithSensors(ctx context.Context, grids []GridTimestampResult, gridIDs []int) error {
+	// Build query with IN clause for grid IDs
+	query := `
+		SELECT gsa.grid_run_id, gsa.sensor_id, gsa.avg_mm_h, gsa.measurement_count, 
+		       gsa.min_value_mm, gsa.max_value_mm,
+		       s.id, s.name, s.provider_id, s.lat, s.lon, s.city, s.subbasin, s.barrio, s.created_at, s.updated_at
+		FROM shizuku.grid_sensor_aggregates gsa
+		INNER JOIN shizuku.sensors s ON s.id = gsa.sensor_id
+		WHERE gsa.grid_run_id = ANY($1)
+		ORDER BY gsa.grid_run_id, gsa.sensor_id
+	`
+
+	rows, err := s.pool.Query(ctx, query, gridIDs)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Create map to organize sensors by grid ID
+	sensorsByGrid := make(map[int][]SensorAggregate)
+
+	for rows.Next() {
+		var gridRunID int
+		var agg SensorAggregate
+		var sensor Sensor
+
+		if err := rows.Scan(
+			&gridRunID,
+			&agg.SensorID,
+			&agg.AvgMmH,
+			&agg.MeasurementCount,
+			&agg.MinValueMm,
+			&agg.MaxValueMm,
+			&sensor.ID,
+			&sensor.Name,
+			&sensor.ProviderID,
+			&sensor.Lat,
+			&sensor.Lon,
+			&sensor.City,
+			&sensor.Subbasin,
+			&sensor.Barrio,
+			&sensor.CreatedAt,
+			&sensor.UpdatedAt,
+		); err != nil {
+			return err
+		}
+
+		agg.Sensor = &sensor
+		sensorsByGrid[gridRunID] = append(sensorsByGrid[gridRunID], agg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Attach sensors to their respective grids
+	for i := range grids {
+		if sensors, ok := sensorsByGrid[grids[i].ID]; ok {
+			grids[i].Sensors = sensors
+		}
+	}
+
+	return nil
 }
 
 type GridRun struct {
