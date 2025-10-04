@@ -6,7 +6,7 @@ import 'core/api/api_v1_client.dart';
 import 'core/providers/sensor_provider.dart';
 import 'core/providers/grid_provider.dart';
 import 'core/providers/dashboard_provider.dart';
-import 'features/visualization/visualization_screen.dart';
+import 'features/visualization/classic_visualization_screen.dart';
 import 'app_theme.dart';
 import 'localization.dart';
 
@@ -54,7 +54,7 @@ class ShizukuViewerApp extends StatelessWidget {
       child: MaterialApp(
         title: language.t('app.title'),
         theme: buildShizukuTheme(),
-        home: const VisualizationScreen(),
+        home: const ClassicVisualizationScreen(),
         debugShowCheckedModeBanner: false,
       ),
     );
