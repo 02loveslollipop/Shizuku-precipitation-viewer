@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import sqlalchemy as sa
@@ -38,13 +38,30 @@ UPDATE_STATUS_SQL = sa.text(
     """
     UPDATE grid_runs
     SET status = :status,
-        blob_url_npz = :npz_url,
         blob_url_json = :json_url,
         blob_url_contours = :contours_url,
         bbox = :bbox,
         message = :message,
         updated_at = NOW()
     WHERE id = :id
+    """
+)
+
+INSERT_AGGREGATES_SQL = sa.text(
+    """
+    INSERT INTO grid_sensor_aggregates 
+        (grid_run_id, sensor_id, ts_start, ts_end, avg_mm_h, 
+         measurement_count, min_value_mm, max_value_mm)
+    VALUES 
+        (:grid_run_id, :sensor_id, :ts_start, :ts_end, :avg_mm_h,
+         :measurement_count, :min_value_mm, :max_value_mm)
+    ON CONFLICT (grid_run_id, sensor_id) 
+    DO UPDATE SET
+        avg_mm_h = EXCLUDED.avg_mm_h,
+        measurement_count = EXCLUDED.measurement_count,
+        min_value_mm = EXCLUDED.min_value_mm,
+        max_value_mm = EXCLUDED.max_value_mm,
+        updated_at = NOW()
     """
 )
 
@@ -121,7 +138,6 @@ class Database:
         self,
         run_id: int,
         bbox_json: str,
-        npz_url: str,
         json_url: str,
         contours_url: str,
         message: str | None = None,
@@ -133,12 +149,30 @@ class Database:
                     "id": run_id,
                     "status": "done",
                     "bbox": bbox_json,
-                    "npz_url": npz_url,
                     "json_url": json_url,
                     "contours_url": contours_url,
                     "message": message,
                 },
             )
+
+    def insert_sensor_aggregates(self, aggregates: List[Dict]) -> int:
+        """
+        Insert sensor aggregates for a grid run.
+        
+        Args:
+            aggregates: List of aggregate dictionaries
+            
+        Returns:
+            Number of aggregates inserted
+        """
+        if not aggregates:
+            return 0
+            
+        with self.engine.begin() as conn:
+            for agg in aggregates:
+                conn.execute(INSERT_AGGREGATES_SQL, agg)
+        
+        return len(aggregates)
 
     def mark_failure(self, run_id: int, message: str) -> None:
         with self.engine.begin() as conn:

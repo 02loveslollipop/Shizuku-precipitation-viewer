@@ -1,0 +1,75 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+LICENSE
+
+# Development
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+*_test.go
+test/
+coverage.out
+
+# Python (not needed for Go watcher)
+*.py
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+notebooks/
+
+# Node/Frontend (not needed for watcher)
+node_modules/
+npm-debug.log
+yarn-error.log
+apps/
+flutter/
+
+# Database
+*.sql
+db/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+*.sublime-*
+.vscode/settings.json
+.idea/
+
+# Build artifacts (except the ones we need)
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+build/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml

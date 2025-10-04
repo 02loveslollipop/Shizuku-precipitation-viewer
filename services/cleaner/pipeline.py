@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+import warnings
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
+from statsmodels.tsa.arima.model import ARIMA
 
 from .config import Config
 
@@ -53,11 +54,11 @@ def _clean_sensor_dataframe(sensor_id: str, df: pd.DataFrame, cfg: Config) -> pd
 
     imputation_method = pd.Series(index=clean_series.index, dtype="object")
 
-    if cfg.gbm_enabled:
-        gbm_filled, gbm_labels = _gbm_forecast_fill(clean_series, cfg)
-        newly_filled = clean_series.isna() & gbm_filled.notna()
-        clean_series = gbm_filled
-        imputation_method.loc[newly_filled] = gbm_labels.loc[newly_filled]
+    if cfg.arima_enabled:
+        arima_filled, arima_labels = _arima_forecast_fill(clean_series, cfg)
+        newly_filled = clean_series.isna() & arima_filled.notna()
+        clean_series = arima_filled
+        imputation_method.loc[newly_filled] = arima_labels.loc[newly_filled]
 
     remaining = clean_series.isna()
     if remaining.any():
@@ -88,18 +89,16 @@ def _clean_sensor_dataframe(sensor_id: str, df: pd.DataFrame, cfg: Config) -> pd
             logger.debug("sensor %s: no base data for hourly medians", sensor_id)
 
     if remaining.any():
-        base_series = clean_series.dropna()
-        fallback = base_series.median() if not base_series.empty else None
-        if pd.isna(fallback):
-            fallback = cfg.min_value_mm
-            logger.debug(
-                "sensor %s: using fallback %.3f for %d gaps",
-                sensor_id,
-                fallback,
-                remaining.sum(),
-            )
+        # Final fallback: use 0 (no precipitation)
+        fallback = 0.0
+        logger.debug(
+            "sensor %s: using fallback %.3f for %d gaps",
+            sensor_id,
+            fallback,
+            remaining.sum(),
+        )
         clean_series.loc[remaining] = fallback
-        imputation_method.loc[remaining] = "global_median"
+        imputation_method.loc[remaining] = "zero_fallback"
 
     clean_series = clean_series.clip(lower=cfg.min_value_mm, upper=cfg.max_value_mm)
 
@@ -128,53 +127,87 @@ def _clean_sensor_dataframe(sensor_id: str, df: pd.DataFrame, cfg: Config) -> pd
     return result
 
 
-def _gbm_forecast_fill(series: pd.Series, cfg: Config) -> tuple[pd.Series, pd.Series]:
+def _arima_forecast_fill(series: pd.Series, cfg: Config) -> tuple[pd.Series, pd.Series]:
+    """Fill missing values using ARIMA forecasting."""
     filled = series.copy().astype(float)
     labels = pd.Series(index=series.index, dtype="object")
 
-    feature_cols = ["lag1", "lag2", "lag3", "hour", "dow", "month"]
+    # Need sufficient training data
+    train_mask = filled.notna()
+    if train_mask.sum() < cfg.arima_min_train:
+        logger.debug("Insufficient data for ARIMA (%d < %d)", train_mask.sum(), cfg.arima_min_train)
+        return filled, labels
 
-    def build_features(values: pd.Series) -> pd.DataFrame:
-        return pd.DataFrame(
-            {
-                "lag1": values.shift(1),
-                "lag2": values.shift(2),
-                "lag3": values.shift(3),
-                "hour": values.index.hour,
-                "dow": values.index.dayofweek,
-                "month": values.index.month,
-            },
-            index=values.index,
-        )
+    # Get indices of gaps to fill
+    gap_mask = filled.isna()
+    if not gap_mask.any():
+        return filled, labels
 
-    for _ in range(max(1, cfg.gbm_max_iters)):
-        features = build_features(filled)
-        train_mask = filled.notna()
-        for col in ["lag1", "lag2", "lag3"]:
-            train_mask &= features[col].notna()
-        if train_mask.sum() < cfg.gbm_min_train:
-            break
-
-        model = HistGradientBoostingRegressor(
-            max_depth=cfg.gbm_max_depth,
-            learning_rate=cfg.gbm_learning_rate,
-            random_state=cfg.gbm_random_state,
-        )
-        model.fit(features.loc[train_mask, feature_cols], filled.loc[train_mask])
-
-        pred_mask = filled.isna()
-        progress = False
-        for ts in filled.index[pred_mask]:
-            x = features.loc[ts, feature_cols]
-            if x.isna().any():
+    # Train ARIMA model on available data
+    train_data = filled.dropna()
+    
+    try:
+        # Suppress statsmodels warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            # Use ARIMA with simple order (p, d, q)
+            # For precipitation data: AR(1), I(1), MA(1) is a good starting point
+            if cfg.arima_seasonal and len(train_data) >= cfg.arima_m * 2:
+                # SARIMA model
+                model = ARIMA(
+                    train_data.values,
+                    order=(1, 1, 1),
+                    seasonal_order=(1, 1, 1, cfg.arima_m),
+                    enforce_stationarity=False,
+                    enforce_invertibility=False,
+                )
+            else:
+                # Simple ARIMA model
+                model = ARIMA(
+                    train_data.values,
+                    order=(cfg.arima_max_order, 1, cfg.arima_max_order),
+                    enforce_stationarity=False,
+                    enforce_invertibility=False,
+                )
+            
+            fitted_model = model.fit()
+        
+        # Fill gaps by forecasting
+        filled_count = 0
+        for idx in series.index[gap_mask]:
+            # Find position in the series
+            pos = series.index.get_loc(idx)
+            
+            # Determine how many steps ahead to forecast
+            last_valid_idx = series.index[train_mask][-1]
+            last_valid_pos = series.index.get_loc(last_valid_idx)
+            steps = pos - last_valid_pos
+            
+            if steps <= 0:
+                continue  # Can't forecast backwards
+            
+            if steps > 100:  # Don't forecast too far ahead
                 continue
-            pred = float(model.predict([x.values])[0])
-            pred = float(np.clip(pred, cfg.min_value_mm, cfg.max_value_mm))
-            filled.loc[ts] = pred
-            labels.loc[ts] = "gbm_forecast"
-            progress = True
-
-        if not progress:
-            break
-
+            
+            try:
+                # Make forecast
+                forecast = fitted_model.forecast(steps=steps)
+                pred_value = float(forecast.iloc[-1] if hasattr(forecast, 'iloc') else forecast[-1])
+                
+                # Clip to valid range
+                pred_value = float(np.clip(pred_value, cfg.min_value_mm, cfg.max_value_mm))
+                
+                filled.loc[idx] = pred_value
+                labels.loc[idx] = "arima_forecast"
+                filled_count += 1
+            except Exception as e:
+                logger.debug("Failed to forecast for position %d: %s", pos, str(e))
+                continue
+            
+        logger.debug("ARIMA filled %d gaps", filled_count)
+        
+    except Exception as e:
+        logger.warning("ARIMA forecasting failed: %s", str(e))
+    
     return filled, labels

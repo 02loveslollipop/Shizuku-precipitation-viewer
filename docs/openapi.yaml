@@ -1,0 +1,251 @@
+openapi: 3.0.3
+info:
+  title: Siata Contamination Viewer API v1
+  version: "1.0.0"
+  description: |
+    API for sensor, grid, and realtime precipitation data. All endpoints return JSON and include X-API-Version: v1 header.
+servers:
+  - url: /api/v1
+paths:
+  /core/sensors:
+    get:
+      summary: List all sensors
+      tags: [core]
+      responses:
+        '200':
+          description: List of sensors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sensor'
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+  /core/sensors/{id}:
+    get:
+      summary: Get sensor by ID
+      tags: [core]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sensor metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Sensor'
+  /grid/timestamps:
+    get:
+      summary: List grid timestamps (paginated)
+      tags: [grid]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Paginated grid timestamps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GridRun'
+                  meta:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      total_count:
+                        type: integer
+                      has_more:
+                        type: boolean
+  /grid/{timestamp}:
+    get:
+      summary: Get grid by timestamp
+      tags: [grid]
+      parameters:
+        - name: timestamp
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Grid metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GridRun'
+  /grid/{timestamp}/sensors:
+    get:
+      summary: Get sensor aggregates for grid
+      tags: [grid]
+      parameters:
+        - name: timestamp
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Sensor aggregates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SensorAggregate'
+                  meta:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                      sensor_count:
+                        type: integer
+  /grid/{timestamp}/contours:
+    get:
+      summary: Get contours for grid
+      tags: [grid]
+      parameters:
+        - name: timestamp
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Contours URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                      contours_url:
+                        type: string
+  /realtime/now:
+    get:
+      summary: Get latest grid and sensor aggregates
+      tags: [realtime]
+      responses:
+        '200':
+          description: Latest grid and aggregates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GridRun'
+                  meta:
+                    type: object
+                    properties:
+                      sensor_count:
+                        type: integer
+                      grid_run_id:
+                        type: integer
+components:
+  schemas:
+    Sensor:
+      type: object
+      properties:
+        sensor_id:
+          type: string
+        name:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        altitude:
+          type: number
+        measurement_unit:
+          type: string
+    GridRun:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+        grid_url:
+          type: string
+        contours_url:
+          type: string
+        bounds:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+        sensor_aggregates:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorAggregate'
+    SensorAggregate:
+      type: object
+      properties:
+        sensor_id:
+          type: string
+        avg_mm_h:
+          type: number
+        min_mm_h:
+          type: number
+        max_mm_h:
+          type: number
+        measurement_count:
+          type: integer
