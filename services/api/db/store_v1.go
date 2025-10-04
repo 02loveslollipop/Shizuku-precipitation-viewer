@@ -236,25 +236,23 @@ func (s *Store) GetGridRunByTimestamp(ctx context.Context, timestamp time.Time) 
 	return &g, nil
 }
 
-type SensorAggregate struct {
-	SensorID         string    `json:"sensor_id"`
-	SensorName       *string   `json:"sensor_name,omitempty"`
-	Lat              float64   `json:"lat"`
-	Lon              float64   `json:"lon"`
-	AvgMmH           float64   `json:"avg_mm_h"`
-	MeasurementCount int       `json:"measurement_count"`
-	CreatedAt        time.Time `json:"created_at"`
-}
-
 func (s *Store) GetSensorAggregatesByTimestamp(ctx context.Context, timestamp time.Time) ([]SensorAggregate, error) {
 	query := `
 		SELECT gsa.sensor_id,
-		       s.name,
-		       s.lat,
-		       s.lon,
 		       gsa.avg_mm_h,
 		       gsa.measurement_count,
-		       gsa.created_at
+		       gsa.min_value_mm,
+		       gsa.max_value_mm,
+		       s.id,
+		       s.name,
+		       s.provider_id,
+		       s.lat,
+		       s.lon,
+		       s.city,
+		       s.subbasin,
+		       s.barrio,
+		       s.created_at,
+		       s.updated_at
 		FROM shizuku.grid_sensor_aggregates gsa
 		JOIN shizuku.grid_runs g ON g.id = gsa.grid_run_id
 		JOIN shizuku.sensors s ON s.id = gsa.sensor_id
@@ -271,17 +269,29 @@ func (s *Store) GetSensorAggregatesByTimestamp(ctx context.Context, timestamp ti
 	aggregates := make([]SensorAggregate, 0)
 	for rows.Next() {
 		var agg SensorAggregate
+		var sensor Sensor
+		
 		if err := rows.Scan(
 			&agg.SensorID,
-			&agg.SensorName,
-			&agg.Lat,
-			&agg.Lon,
 			&agg.AvgMmH,
 			&agg.MeasurementCount,
-			&agg.CreatedAt,
+			&agg.MinValueMm,
+			&agg.MaxValueMm,
+			&sensor.ID,
+			&sensor.Name,
+			&sensor.ProviderID,
+			&sensor.Lat,
+			&sensor.Lon,
+			&sensor.City,
+			&sensor.Subbasin,
+			&sensor.Barrio,
+			&sensor.CreatedAt,
+			&sensor.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
+		
+		agg.Sensor = &sensor
 		aggregates = append(aggregates, agg)
 	}
 
@@ -291,12 +301,20 @@ func (s *Store) GetSensorAggregatesByTimestamp(ctx context.Context, timestamp ti
 func (s *Store) GetSensorAggregatesByGridRunID(ctx context.Context, gridRunID int) ([]SensorAggregate, error) {
 	query := `
 		SELECT gsa.sensor_id,
-		       s.name,
-		       s.lat,
-		       s.lon,
 		       gsa.avg_mm_h,
 		       gsa.measurement_count,
-		       gsa.created_at
+		       gsa.min_value_mm,
+		       gsa.max_value_mm,
+		       s.id,
+		       s.name,
+		       s.provider_id,
+		       s.lat,
+		       s.lon,
+		       s.city,
+		       s.subbasin,
+		       s.barrio,
+		       s.created_at,
+		       s.updated_at
 		FROM shizuku.grid_sensor_aggregates gsa
 		JOIN shizuku.sensors s ON s.id = gsa.sensor_id
 		WHERE gsa.grid_run_id = $1
@@ -312,17 +330,29 @@ func (s *Store) GetSensorAggregatesByGridRunID(ctx context.Context, gridRunID in
 	aggregates := make([]SensorAggregate, 0)
 	for rows.Next() {
 		var agg SensorAggregate
+		var sensor Sensor
+		
 		if err := rows.Scan(
 			&agg.SensorID,
-			&agg.SensorName,
-			&agg.Lat,
-			&agg.Lon,
 			&agg.AvgMmH,
 			&agg.MeasurementCount,
-			&agg.CreatedAt,
+			&agg.MinValueMm,
+			&agg.MaxValueMm,
+			&sensor.ID,
+			&sensor.Name,
+			&sensor.ProviderID,
+			&sensor.Lat,
+			&sensor.Lon,
+			&sensor.City,
+			&sensor.Subbasin,
+			&sensor.Barrio,
+			&sensor.CreatedAt,
+			&sensor.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
+		
+		agg.Sensor = &sensor
 		aggregates = append(aggregates, agg)
 	}
 
