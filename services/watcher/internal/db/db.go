@@ -17,7 +17,7 @@ func UpsertSensors(ctx context.Context, pool *pgxpool.Pool, sensors []models.Sen
 	}
 
 	batch := &pgx.Batch{}
-	query := `INSERT INTO sensors (id, name, provider_id, lat, lon, elevation_m, city, subbasin, barrio, metadata, created_at, updated_at)
+	query := `INSERT INTO shizuku.sensors (id, name, provider_id, lat, lon, elevation_m, city, subbasin, barrio, metadata, created_at, updated_at)
 VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,$9,NOW(),NOW())
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
@@ -55,7 +55,7 @@ func FetchLastMeasurements(ctx context.Context, pool *pgxpool.Pool, sensorIDs []
 
 	rows, err := pool.Query(ctx, `
 SELECT DISTINCT ON (sensor_id) sensor_id, value_mm, ts
-FROM raw_measurements
+FROM shizuku.raw_measurements
 WHERE sensor_id = ANY($1) AND source = 'current'
 ORDER BY sensor_id, ts DESC`, sensorIDs)
 	if err != nil {
@@ -83,11 +83,10 @@ func InsertMeasurements(ctx context.Context, pool *pgxpool.Pool, measurements []
 	}
 
 	batch := &pgx.Batch{}
-	query := `INSERT INTO raw_measurements (sensor_id, ts, value_mm, quality, variable, source, ingested_at, created_at, updated_at)
+	query := `INSERT INTO shizuku.raw_measurements (sensor_id, ts, value_mm, quality, variable, source, ingested_at, created_at, updated_at)
 VALUES ($1,$2,$3,NULL,'precipitacion','current',NOW(),NOW(),NOW())
-ON CONFLICT (sensor_id, ts) DO UPDATE
+ON CONFLICT (sensor_id, ts, source) DO UPDATE
 SET value_mm = EXCLUDED.value_mm,
-    quality = EXCLUDED.quality,
     updated_at = NOW()`
 
 	for _, m := range measurements {

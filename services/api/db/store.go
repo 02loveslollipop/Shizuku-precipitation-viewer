@@ -170,7 +170,7 @@ func (s *Store) FetchMeasurements(ctx context.Context, q MeasurementQuery) ([]Me
 
 const latestCleanSQL = `
     SELECT sensor_id, ts, value_mm, qc_flags, imputation_method
-    FROM latest_clean_measurements
+    FROM shizuku.latest_clean_measurements
 `
 
 // LatestClean returns the latest clean measurement per sensor.

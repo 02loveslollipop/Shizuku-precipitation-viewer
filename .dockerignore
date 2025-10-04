@@ -1,0 +1,83 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+notebooks/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Data files
+data/
+*.csv
+*.parquet
+*.npz
+*.json
+
+# Reports
+reports/
+
+# Flutter/Dart
+apps/
+flutter/
+
+# Python services (not needed for Go API)
+services/cleaner/
+services/etl/
+services/archiver/
+
+# Test files
+*_test.go
+test/
+*.test
+
+# Build artifacts
+*.exe
+*.dll
+*.dylib
+
+# Docker
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# Environment files
+.env
+.env.*
+mock.env
+
+# Other
+Procfile
+requirements.txt
+*.pyc

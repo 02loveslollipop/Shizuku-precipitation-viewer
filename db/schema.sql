@@ -3,12 +3,6 @@
 -- Version: 2.1 (Standard PostgreSQL)
 -- Date: October 4, 2025
 -- ============================================================================
--- This is the complete schema for a fresh database instance.
--- Apply this to create all tables from scratch.
--- 
--- Note: This version uses standard PostgreSQL with traditional indexes
---       instead of TimescaleDB for maximum compatibility.
--- ============================================================================
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -72,7 +66,8 @@ CREATE TABLE IF NOT EXISTS raw_measurements (
     source          TEXT DEFAULT 'current',
     ingested_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT raw_measurements_unique_measurement UNIQUE (sensor_id, ts, source)
 );
 
 CREATE TRIGGER raw_measurements_set_updated_at
@@ -100,7 +95,8 @@ CREATE TABLE IF NOT EXISTS clean_measurements (
     imputation_method   TEXT,
     version             INTEGER DEFAULT 1,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT clean_measurements_unique_version UNIQUE (sensor_id, ts, version)
 );
 
 CREATE TRIGGER clean_measurements_set_updated_at
