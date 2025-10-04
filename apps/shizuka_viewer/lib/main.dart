@@ -32,7 +32,7 @@ class ShizukuViewerApp extends StatelessWidget {
     // Create API client instance
     // TODO: Configure with proper base URL from environment
     final apiClient = ApiV1Client(
-      baseUrl: 'http://localhost:8080',  // Update this for production
+      baseUrl: 'https://api.shizuku.02labs.me',  
     );
 
     return MultiProvider(
