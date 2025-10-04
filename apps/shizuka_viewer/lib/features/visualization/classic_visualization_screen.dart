@@ -48,7 +48,10 @@ class _ClassicVisualizationScreenState
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    // Schedule initial data load after the first frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialData();
+    });
     _updateRefreshTimer();
   }
 

@@ -328,11 +328,15 @@ class LatestGrid {
   });
 
   factory LatestGrid.fromJson(Map<String, dynamic> json) {
+    // Parse from /api/v1/realtime/now response structure
+    final data = json['data'] as Map<String, dynamic>;
+    final grid = data['grid'] as Map<String, dynamic>;
+    
     return LatestGrid(
-      ts: DateTime.parse(json['ts'] as String).toUtc(),
-      gridRunId: json['grid_run_id'] as int,
-      gridUrl: json['grid_url'] as String?,
-      contoursUrl: json['contours_url'] as String?,
+      ts: DateTime.parse(grid['timestamp'] as String).toUtc(),
+      gridRunId: grid['id'] as int,
+      gridUrl: grid['blob_url_json'] as String?,
+      contoursUrl: grid['blob_url_contours'] as String?,
     );
   }
 }
@@ -358,12 +362,46 @@ class RealtimeMeasurement {
     this.sensor,
   });
 
-  factory RealtimeMeasurement.fromJson(Map<String, dynamic> json) {
+  factory RealtimeMeasurement.fromJson(
+    Map<String, dynamic> json, {
+    DateTime? timestamp,
+  }) {
+    // Handle both individual measurement format and sensor aggregate format
+    final sensorId = json['sensor_id'] as String;
+    
+    // Parse timestamp - use provided timestamp or parse from json
+    DateTime ts;
+    if (timestamp != null) {
+      ts = timestamp;
+    } else if (json.containsKey('ts')) {
+      ts = DateTime.parse(json['ts'] as String).toUtc();
+    } else {
+      // Fallback to current time
+      ts = DateTime.now().toUtc();
+    }
+    
+    // Parse value - support both value_mm and avg_mm_h
+    double valueMm;
+    if (json.containsKey('value_mm')) {
+      valueMm = (json['value_mm'] as num).toDouble();
+    } else if (json.containsKey('avg_mm_h')) {
+      valueMm = (json['avg_mm_h'] as num).toDouble();
+    } else {
+      valueMm = 0.0;
+    }
+    
+    // Parse enriched sensor info if available
+    Sensor? sensor;
+    if (json['sensor'] != null) {
+      sensor = Sensor.fromJson(json['sensor'] as Map<String, dynamic>);
+    }
+    
     return RealtimeMeasurement(
-      sensorId: json['sensor_id'] as String,
-      ts: DateTime.parse(json['ts'] as String).toUtc(),
-      valueMm: (json['value_mm'] as num).toDouble(),
+      sensorId: sensorId,
+      ts: ts,
+      valueMm: valueMm,
       qcFlags: json['qc_flags'] as int?,
+      sensor: sensor,
     );
   }
 }
@@ -378,13 +416,23 @@ class RealtimeMeasurements {
   });
 
   factory RealtimeMeasurements.fromJson(Map<String, dynamic> json) {
-    final measurementsJson = json['measurements'] as List<dynamic>;
-    final measurements = measurementsJson
-        .map((m) => RealtimeMeasurement.fromJson(m as Map<String, dynamic>))
-        .toList();
+    // Parse from /api/v1/realtime/now response structure
+    final data = json['data'] as Map<String, dynamic>;
+    final grid = data['grid'] as Map<String, dynamic>;
+    
+    // Use grid timestamp as the reference timestamp
+    final gridTimestamp = DateTime.parse(grid['timestamp'] as String).toUtc();
+    
+    final aggregatesJson = data['sensor_aggregates'] as List<dynamic>?;
+    final measurements = aggregatesJson
+        ?.map((m) => RealtimeMeasurement.fromJson(
+              m as Map<String, dynamic>,
+              timestamp: gridTimestamp,
+            ))
+        .toList() ?? [];
     
     return RealtimeMeasurements(
-      timestamp: DateTime.parse(json['timestamp'] as String).toUtc(),
+      timestamp: gridTimestamp,
       measurements: measurements,
     );
   }

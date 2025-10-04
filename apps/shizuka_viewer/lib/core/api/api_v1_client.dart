@@ -137,7 +137,8 @@ class ApiV1Client {
 
   /// Get latest grid information
   Future<LatestGrid> getLatestGrid() async {
-    final response = await _get('/api/v1/grid/latest');
+    // Use realtime/now endpoint which returns the latest grid data
+    final response = await _get('/api/v1/realtime/now');
     return LatestGrid.fromJson(response);
   }
 
