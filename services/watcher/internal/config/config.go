@@ -34,9 +34,14 @@ func Load() (Config, error) {
 
 	cfg := Config{}
 
-	cfg.DatabaseURL = strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	// Support Heroku's dynamic database URL naming via DB_ENV_VARIABLE
+	dbEnvVarName := strings.TrimSpace(os.Getenv("DB_ENV_VARIABLE"))
+	if dbEnvVarName == "" {
+		dbEnvVarName = "DATABASE_URL"
+	}
+	cfg.DatabaseURL = strings.TrimSpace(os.Getenv(dbEnvVarName))
 	if cfg.DatabaseURL == "" {
-		return cfg, errors.New("DATABASE_URL is required")
+		return cfg, fmt.Errorf("%s is required (specified by DB_ENV_VARIABLE=%s)", dbEnvVarName, dbEnvVarName)
 	}
 
 	cfg.CurrentURL = strings.TrimSpace(os.Getenv("CURRENT_URL"))

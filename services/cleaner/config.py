@@ -9,6 +9,27 @@ from typing import Optional
 from dotenv import load_dotenv
 
 
+def _get_database_url() -> str:
+    """Get database URL with support for Heroku's dynamic env variable names.
+    
+    Reads DB_ENV_VARIABLE to get the actual env variable name containing the database URL.
+    This handles Heroku's random DATABASE_URL naming (e.g., HEROKU_POSTGRESQL_PURPLE_URL).
+    Also fixes postgres:// to postgresql:// for Python compatibility.
+    """
+    # First check if we have an indirection variable
+    db_env_var_name = os.getenv("DB_ENV_VARIABLE", "DATABASE_URL")
+    database_url = os.getenv(db_env_var_name)
+    
+    if not database_url:
+        raise RuntimeError(f"{db_env_var_name} is required (specified by DB_ENV_VARIABLE={db_env_var_name})")
+    
+    # Fix postgres:// to postgresql:// for Python compatibility
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    
+    return database_url
+
+
 @dataclass(slots=True)
 class Config:
     database_url: str
@@ -59,9 +80,7 @@ def _parse_optional_int(value: Optional[str]) -> Optional[int]:
 def load() -> Config:
     load_dotenv(dotenv_path=Path(".env"), override=False)
 
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is required")
+    database_url = _get_database_url()
 
     lookback_hours = _parse_int(os.getenv("CLEANER_LOOKBACK_HOURS"), default=72)
     lookback = timedelta(hours=lookback_hours)
