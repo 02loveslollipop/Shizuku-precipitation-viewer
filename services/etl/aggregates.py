@@ -164,7 +164,8 @@ def calculate_grid_sensor_aggregates(
     
     if len(valid_aggregates) < len(aggregates):
         logger.warning(
-            f"Filtered out {len(aggregates) - len(valid_aggregates)} invalid aggregates"
+            "Filtered out %d invalid aggregates",
+            len(aggregates) - len(valid_aggregates)
         )
     
     return valid_aggregates
