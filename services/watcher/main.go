@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +19,9 @@ func main() {
 	if err := run(); err != nil {
 		log.Fatalf("watcher failed: %v", err)
 	}
+	// Explicitly exit to ensure container stops immediately
+	// This is important for cron-style jobs in container platforms
+	os.Exit(0)
 }
 
 func run() error {
