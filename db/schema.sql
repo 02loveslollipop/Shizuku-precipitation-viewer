@@ -1,15 +1,17 @@
 -- ============================================================================
 -- SIATA Contamination Viewer - Complete Database Schema
--- Version: 2.0 (Refactored)
--- Date: October 1, 2025
+-- Version: 2.1 (Standard PostgreSQL)
+-- Date: October 4, 2025
 -- ============================================================================
 -- This is the complete schema for a fresh database instance.
 -- Apply this to create all tables from scratch.
+-- 
+-- Note: This version uses standard PostgreSQL with traditional indexes
+--       instead of TimescaleDB for maximum compatibility.
 -- ============================================================================
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- ============================================================================
 -- Helper Functions
@@ -82,8 +84,8 @@ CREATE INDEX raw_measurements_sensor_ts_idx ON raw_measurements(sensor_id, ts DE
 CREATE INDEX raw_measurements_ts_idx ON raw_measurements(ts DESC);
 CREATE INDEX raw_measurements_source_idx ON raw_measurements(source);
 
--- Convert to hypertable for time-series optimization
-SELECT create_hypertable('raw_measurements', 'ts', if_not_exists => TRUE);
+-- Partitioning hint: For very large datasets, consider partitioning by date range
+-- Example: PARTITION BY RANGE (ts)
 
 COMMENT ON TABLE raw_measurements IS 'Raw precipitation measurements from external sources';
 COMMENT ON COLUMN raw_measurements.source IS 'Data source: "current" for real-time, "historic" for backfilled data';
@@ -110,8 +112,8 @@ CREATE INDEX clean_measurements_sensor_ts_idx ON clean_measurements(sensor_id, t
 CREATE INDEX clean_measurements_ts_idx ON clean_measurements(ts DESC);
 CREATE INDEX clean_measurements_imputation_idx ON clean_measurements(imputation_method) WHERE imputation_method IS NOT NULL;
 
--- Convert to hypertable for time-series optimization
-SELECT create_hypertable('clean_measurements', 'ts', if_not_exists => TRUE);
+-- Partitioning hint: For very large datasets, consider partitioning by date range
+-- Example: PARTITION BY RANGE (ts)
 
 COMMENT ON TABLE clean_measurements IS 'Quality-controlled precipitation measurements with imputation';
 COMMENT ON COLUMN clean_measurements.qc_flags IS 'Quality control flags bitmap';
