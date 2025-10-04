@@ -16,10 +16,10 @@ logger = logging.getLogger("cleaner")
 def run() -> None:
     cfg = config.load()
     logger.info(
-        "starting cleaner (lookback=%s, dry_run=%s, gbm_enabled=%s)",
+        "starting cleaner (lookback=%s, dry_run=%s, arima_enabled=%s)",
         cfg.lookback,
         cfg.dry_run,
-        cfg.gbm_enabled,
+        cfg.arima_enabled,
     )
 
     db = Database(cfg.database_url)
