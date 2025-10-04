@@ -200,7 +200,6 @@ type GridInfo struct {
 	Bounds      []float64 `json:"bounds,omitempty"`
 	SRID        string    `json:"srid"`
 	GridURL     *string   `json:"grid_url,omitempty"`
-	GridNPZURL  *string   `json:"grid_npz_url,omitempty"`
 	ContoursURL *string   `json:"contours_url,omitempty"`
 	Status      string    `json:"status"`
 	ErrorMsg    *string   `json:"error_msg,omitempty"`
@@ -235,7 +234,7 @@ func (s *Store) GetAvailableGridTimestamps(ctx context.Context) ([]time.Time, er
 }
 
 const gridByTimestampSQL = `
-    SELECT id, ts, res_m, bbox, crs, blob_url_json, blob_url_npz, blob_url_contours, status, message, created_at, updated_at
+    SELECT id, ts, res_m, bbox, crs, blob_url_json, blob_url_contours, status, message, created_at, updated_at
     FROM grid_runs
     WHERE ts = $1 AND status = 'done'
     LIMIT 1
@@ -254,7 +253,6 @@ func (s *Store) GetGridByTimestamp(ctx context.Context, timestamp time.Time) (*G
 		&boundsJSON,    // bbox
 		&g.SRID,        // crs
 		&g.GridURL,     // blob_url_json
-		&g.GridNPZURL,  // blob_url_npz
 		&g.ContoursURL, // blob_url_contours
 		&g.Status,      // status
 		&g.ErrorMsg,    // message

@@ -11,6 +11,7 @@ from .contours import generate_contours_geojson
 from .db import Database
 from .grid_builder import GridBuilder
 from .uploader import BlobUploader
+from .aggregates import calculate_grid_sensor_aggregates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("etl")
@@ -56,26 +57,19 @@ def run():
                 db.mark_success(
                     run_id,
                     json.dumps(list(artifact.bbox_3857)),
-                    npz_url="",
                     json_url="",
                     contours_url="",
                     message="dry-run",
                 )
                 continue
 
-            npz_payload = {
-                "data": artifact.data_grid.astype(np.float32),
-                "x": artifact.x_coords.astype(np.float64),
-                "y": artifact.y_coords.astype(np.float64),
-                "metadata": np.array([artifact.metadata_json]),
-            }
-            npz_url = uploader.upload_npz(f"{base_key}/grid.npz", npz_payload)
-
+            # Upload grid JSON
             grid_json_url = uploader.upload_grid_json(
                 f"{base_key}/grid.json.gz",
                 artifact,
             )
 
+            # Upload contours GeoJSON
             contour_bytes = generate_contours_geojson(
                 artifact.x_coords,
                 artifact.y_coords,
@@ -88,18 +82,41 @@ def run():
                 "application/geo+json",
             )
 
-            # Upload JPEG preview if the artifact provided one
+            # Upload JPEG preview if available
             jpeg_url = None
             if getattr(artifact, 'jpeg_bytes', None):
                 try:
-                    jpeg_url = uploader.upload_bytes(f"{base_key}/preview.jpg", artifact.jpeg_bytes, "image/jpeg")
-                except Exception:
+                    jpeg_url = uploader.upload_bytes(
+                        f"{base_key}/preview.jpg", 
+                        artifact.jpeg_bytes, 
+                        "image/jpeg"
+                    )
+                    logger.info("uploaded JPEG preview: %s", jpeg_url)
+                except Exception as exc:
+                    logger.warning("failed to upload JPEG: %s", exc)
                     jpeg_url = None
 
+            # Calculate sensor aggregates
+            slot_end = slot + cfg.grid_interval
+            aggregates = calculate_grid_sensor_aggregates(
+                snapshot,
+                ts_start=slot,
+                ts_end=slot_end
+            )
+            
+            # Insert aggregates into database
+            if aggregates:
+                for agg in aggregates:
+                    agg['grid_run_id'] = run_id
+                inserted_count = db.insert_sensor_aggregates(aggregates)
+                logger.info("inserted %d sensor aggregates", inserted_count)
+            else:
+                logger.warning("no aggregates calculated for slot %s", slot.isoformat())
+
+            # Update latest pointer (no .npz reference)
             metadata = json.loads(artifact.metadata_json)
             latest_payload = {
                 "timestamp": metadata["timestamp"],
-                "grid_npz_url": npz_url,
                 "grid_json_url": grid_json_url,
                 "grid_preview_jpeg_url": jpeg_url,
                 "contours_url": contours_url,
@@ -111,10 +128,10 @@ def run():
             latest_url = uploader.upload_json("grids/latest.json", latest_payload)
             logger.info("updated latest pointer: %s", latest_url)
 
+            # Mark grid run as successful
             db.mark_success(
                 run_id,
                 json.dumps(list(artifact.bbox_3857)),
-                npz_url=npz_url,
                 json_url=grid_json_url,
                 contours_url=contours_url,
             )

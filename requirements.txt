@@ -15,3 +15,4 @@ pillow>=9.0
 requests>=2.31
 vercel-blob>=0.4
 plotly>=6.3.0
+pmdarima>=2.0.4

@@ -44,7 +44,7 @@ class SensorDetailSheet extends StatelessWidget {
             '${LanguageScope.of(context).t('Measurement')}: ${measurement.valueMm.toStringAsFixed(4)} mm',
           ),
           Text(
-            '${LanguageScope.of(context).t('Intensity')}: ${LanguageScope.of(context).t('intensity.' + _intensityKey(intensity) + '.label')}',
+            '${LanguageScope.of(context).t('Intensity')}: ${LanguageScope.of(context).t('intensity.${_intensityKey(intensity)}.label')}',
           ),
           Row(
             children: [

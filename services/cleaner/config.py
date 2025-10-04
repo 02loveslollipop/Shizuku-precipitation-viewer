@@ -18,12 +18,11 @@ class Config:
     min_quality: Optional[float]
     interpolation_limit: int
     dry_run: bool
-    gbm_enabled: bool
-    gbm_max_depth: int
-    gbm_learning_rate: float
-    gbm_min_train: int
-    gbm_max_iters: int
-    gbm_random_state: Optional[int]
+    arima_enabled: bool
+    arima_min_train: int
+    arima_max_order: int
+    arima_seasonal: bool
+    arima_m: int
 
 
 def _parse_float(value: Optional[str], default: float) -> float:
@@ -73,12 +72,11 @@ def load() -> Config:
     interpolation_limit = _parse_int(os.getenv("CLEANER_INTERPOLATION_LIMIT"), default=6)
     dry_run = _parse_bool(os.getenv("DRY_RUN"), default=False)
 
-    gbm_enabled = _parse_bool(os.getenv("CLEANER_GBM_ENABLED"), default=True)
-    gbm_max_depth = _parse_int(os.getenv("CLEANER_GBM_MAX_DEPTH"), default=3)
-    gbm_learning_rate = _parse_float(os.getenv("CLEANER_GBM_LEARNING_RATE"), default=0.1)
-    gbm_min_train = _parse_int(os.getenv("CLEANER_GBM_MIN_TRAIN"), default=48)
-    gbm_max_iters = _parse_int(os.getenv("CLEANER_GBM_MAX_ITERS"), default=10)
-    gbm_random_state = _parse_optional_int(os.getenv("CLEANER_GBM_RANDOM_STATE"))
+    arima_enabled = _parse_bool(os.getenv("CLEANER_ARIMA_ENABLED"), default=True)
+    arima_min_train = _parse_int(os.getenv("CLEANER_ARIMA_MIN_TRAIN"), default=48)
+    arima_max_order = _parse_int(os.getenv("CLEANER_ARIMA_MAX_ORDER"), default=3)
+    arima_seasonal = _parse_bool(os.getenv("CLEANER_ARIMA_SEASONAL"), default=True)
+    arima_m = _parse_int(os.getenv("CLEANER_ARIMA_M"), default=24)  # 24 hours for daily seasonality
 
     return Config(
         database_url=database_url,
@@ -88,10 +86,9 @@ def load() -> Config:
         min_quality=min_quality,
         interpolation_limit=interpolation_limit,
         dry_run=dry_run,
-        gbm_enabled=gbm_enabled,
-        gbm_max_depth=gbm_max_depth,
-        gbm_learning_rate=gbm_learning_rate,
-        gbm_min_train=gbm_min_train,
-        gbm_max_iters=gbm_max_iters,
-        gbm_random_state=gbm_random_state,
+        arima_enabled=arima_enabled,
+        arima_min_train=arima_min_train,
+        arima_max_order=arima_max_order,
+        arima_seasonal=arima_seasonal,
+        arima_m=arima_m,
     )

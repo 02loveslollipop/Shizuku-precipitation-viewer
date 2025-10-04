@@ -74,19 +74,22 @@ func (s *Server) registerRoutes() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	s.engine.GET("/sensor", s.handleListSensors)
-	s.engine.GET("/sensor/:sensor_id", s.handleGetSensor)
-	s.engine.GET("/now", s.handleLatest)
-	s.engine.GET("/grid/latest", s.handleGridLatest)
-	s.engine.GET("/grid/available", s.handleGridAvailable)
-	s.engine.GET("/grid/:timestamp", s.handleGridByTimestamp)
+	// Legacy endpoints (v0) - with deprecation warnings
+	legacy := s.engine.Group("/")
+	legacy.Use(deprecationMiddleware())
+	{
+		legacy.GET("/sensor", deprecatedHandler("/api/v1/core/sensors", s.handleListSensors))
+		legacy.GET("/sensor/:sensor_id", deprecatedHandler("/api/v1/core/sensors/:sensor_id", s.handleGetSensor))
+		legacy.GET("/now", deprecatedHandler("/api/v1/realtime/now", s.handleLatest))
+		legacy.GET("/grid/latest", deprecatedHandler("/api/v1/realtime/now", s.handleGridLatest))
+		legacy.GET("/grid/available", deprecatedHandler("/api/v1/grid/timestamps", s.handleGridAvailable))
+		legacy.GET("/grid/:timestamp", deprecatedHandler("/api/v1/grid/:timestamp", s.handleGridByTimestamp))
+		legacy.GET("/dashboard/summary", deprecatedHandler("", s.handleDashboardSummary)) // No v1 equivalent yet
+		legacy.GET("/snapshot", deprecatedHandler("", s.handleSnapshotAt))                // No v1 equivalent yet
+	}
 
-	// Dashboard summary: aggregates and preview image URL
-	s.engine.GET("/dashboard/summary", s.handleDashboardSummary)
-
-	// Snapshot endpoint: returns one measurement per sensor at-or-before ts
-	// Example: GET /snapshot?ts=2025-09-30T12:00:00Z&clean=true
-	s.engine.GET("/snapshot", s.handleSnapshotAt)
+	// New versioned API routes
+	s.registerV1Routes()
 }
 
 func (s *Server) handleSnapshotAt(c *gin.Context) {
@@ -175,6 +178,50 @@ func corsMiddleware(cfg config.Config) gin.HandlerFunc {
 			return
 		}
 
+		c.Next()
+	}
+}
+
+// deprecationMiddleware adds API version headers to all responses
+func deprecationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Add API version header to all responses
+		c.Header("X-API-Version", "v0-legacy")
+		c.Next()
+	}
+}
+
+// deprecatedHandler wraps a handler and adds deprecation headers
+func deprecatedHandler(newEndpoint string, handler gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Mark this endpoint as deprecated
+		c.Header("X-Deprecated-Endpoint", "true")
+
+		// Provide the new endpoint URL if available
+		if newEndpoint != "" {
+			c.Header("X-New-Endpoint", newEndpoint)
+			// Standard Deprecation header with sunset date (6 months from now)
+			sunsetDate := time.Now().AddDate(0, 6, 0).Format(time.RFC1123)
+			c.Header("Deprecation", "true")
+			c.Header("Sunset", sunsetDate)
+		}
+
+		// Add a warning header
+		if newEndpoint != "" {
+			c.Header("Warning", `299 - "This endpoint is deprecated and will be removed in 6 months. Use `+newEndpoint+` instead."`)
+		} else {
+			c.Header("Warning", `299 - "This endpoint is deprecated. Please contact support for migration guidance."`)
+		}
+
+		// Call the original handler
+		handler(c)
+	}
+}
+
+// apiVersionMiddleware adds API version header to v1 responses
+func apiVersionMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("X-API-Version", "v1")
 		c.Next()
 	}
 }
