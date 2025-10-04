@@ -2,9 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../api/api_client.dart';
 import '../app_constants.dart';
 import '../localization.dart';
+import '../models/presentation_models.dart';
 
 class SensorDetailSheet extends StatelessWidget {
   const SensorDetailSheet({

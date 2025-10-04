@@ -62,7 +62,12 @@ class _RealtimeMapWidgetState extends BaseMapState<RealtimeMapWidget> {
 
   @override
   Widget? buildMapOverlay() {
-    if (widget.timestamp == null) return null;
+    if (widget.measurements.isEmpty) return null;
+
+    // Get the most recent measurement timestamp from actual data
+    final latestTimestamp = widget.measurements
+        .map((m) => m.ts)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
 
     return Positioned(
       top: 16,
@@ -85,7 +90,7 @@ class _RealtimeMapWidgetState extends BaseMapState<RealtimeMapWidget> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   Text(
-                    _formatTimestamp(widget.timestamp!),
+                    _formatTimestamp(latestTimestamp),
                     style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                   ),
                 ],
@@ -154,7 +159,7 @@ class _RealtimeMarker extends StatelessWidget {
               ],
             ),
             child: Text(
-              '${measurement.valueMm.toStringAsFixed(1)} mm',
+              '${measurement.valueMm.toStringAsFixed(2)} mm',
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
