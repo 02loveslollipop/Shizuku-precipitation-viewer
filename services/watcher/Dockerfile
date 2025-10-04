@@ -59,11 +59,5 @@ ENV TZ=UTC \
     DRY_RUN=false \
     REQUEST_TIMEOUT=30s
 
-# Health check (optional - checks if process is running)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -x watcher || exit 1
 
-# Run the watcher service
-# Note: This is a one-shot service that runs and exits
-# For continuous operation, use a cron job or orchestration tool
-ENTRYPOINT ["/app/watcher"]
+CMD ["/app/watcher"]
