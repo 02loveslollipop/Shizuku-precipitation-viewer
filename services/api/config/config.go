@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -41,6 +42,11 @@ func Load() (Config, error) {
 	cfg.DatabaseURL = os.Getenv(dbEnvVarName)
 	if cfg.DatabaseURL == "" {
 		return cfg, fmt.Errorf("%s is required (specified by DB_ENV_VARIABLE=%s)", dbEnvVarName, dbEnvVarName)
+	}
+
+	// Fix postgres:// to postgresql:// for compatibility (Heroku sometimes provides postgres://)
+	if strings.HasPrefix(cfg.DatabaseURL, "postgres://") {
+		cfg.DatabaseURL = strings.Replace(cfg.DatabaseURL, "postgres://", "postgresql://", 1)
 	}
 
 	cfg.BlobBaseURL = os.Getenv("VERCEL_BLOB_BASE_URL")

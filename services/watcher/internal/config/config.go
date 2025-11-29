@@ -43,6 +43,11 @@ func Load() (Config, error) {
 		return cfg, fmt.Errorf("%s is required (specified by DB_ENV_VARIABLE=%s)", dbEnvVarName, dbEnvVarName)
 	}
 
+	// Fix postgres:// to postgresql:// for compatibility (Heroku sometimes provides postgres://)
+	if strings.HasPrefix(cfg.DatabaseURL, "postgres://") {
+		cfg.DatabaseURL = strings.Replace(cfg.DatabaseURL, "postgres://", "postgresql://", 1)
+	}
+
 	cfg.CurrentURL = strings.TrimSpace(os.Getenv("CURRENT_URL"))
 	if cfg.CurrentURL == "" {
 		cfg.CurrentURL = defaultCurrentURL
